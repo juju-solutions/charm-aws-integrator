@@ -1,0 +1,9 @@
+repo: 'https://github.com/juju-solutions/layer-aws'
+includes: ['layer:basic', 'layer:snap', 'interface:aws']
+options:
+  basic:
+    use_venv: true
+  snap:
+    aws-cli:
+      channel: stable
+      classic: true

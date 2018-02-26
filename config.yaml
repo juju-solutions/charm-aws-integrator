@@ -1,0 +1,9 @@
+options:
+  access_key:
+    description: An IAM access key.
+    type: string
+    default: ""
+  secret_key:
+    description: An IAM secret key.
+    type: string
+    default: ""
