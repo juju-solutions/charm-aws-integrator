@@ -52,21 +52,23 @@ def handle_requests():
     aws = endpoint_from_flag('endpoint.aws.requested')
     for request in aws.requests:
         if request.instance_tags:
-            tag_instance(request.instance_id, request.instance_tags)
+            tag_instance(request.instance_id, request.region,
+                         request.instance_tags)
         if request.security_group_tags:
-            tag_security_group(request.instance_id,
+            tag_security_group(request.instance_id, request.region,
                                request.security_group_tags)
         if request.subnet_tags:
-            tag_subnet(request.instance_id, request.subnet_tags)
+            tag_subnet(request.instance_id, request.region,
+                       request.subnet_tags)
         if request.requested_elb:
-            enable_elb(request.instance_id)
+            enable_elb(request.instance_id, request.region)
         if request.requested_ebs:
-            enable_ebs(request.instance_id)
+            enable_ebs(request.instance_id, request.region)
         if request.requested_route53:
-            enable_route53(request.instance_id)
+            enable_route53(request.instance_id, request.region)
         if request.requested_s3_read:
-            enable_s3_read(request.instance_id)
+            enable_s3_read(request.instance_id, request.region)
         if request.requested_s3_write:
-            enable_s3_write(request.instance_id)
+            enable_s3_write(request.instance_id, request.region)
         request.mark_completed()
     clear_flag('endpoint.aws.requested')
