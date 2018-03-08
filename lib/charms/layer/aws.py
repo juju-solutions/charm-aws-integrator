@@ -29,13 +29,17 @@ def _aws(cmd, subcmd, *args, **kwargs):
     return subprocess.check_output(cmd).decode('utf8')
 
 
-def tag_instance(instance_id, region, tags):
+def _apply_tags(region, resources, tags):
     tags = ['Key={},Value={}'.format(key, value or '')
             for key, value in tags.items()]
     _aws(*['ec2', 'create-tags'] +
           ['--region', region] +
-          ['--resources', instance_id] +
+          ['--resources'] + resources +
           ['--tags'] + tags)
+
+
+def tag_instance(instance_id, region, tags):
+    _apply_tags(region, [instance_id], tags)
 
 
 def tag_instance_security_group(instance_id, region, tags):
@@ -48,16 +52,16 @@ def tag_instance_security_group(instance_id, region, tags):
     groups = [line.split() for line in groups.splitlines()]
     group_ids = [group_id for group_id, group_name in groups
                  if re.match(r'^juju-.*-\d+$', group_name)]
-    tags = ['Key={},Value={}'.format(key, value or '')
-            for key, value in tags.items()]
-    _aws(*['ec2', 'create-tags'] +
-          ['--region', region] +
-          ['--resources'] + group_ids +
-          ['--tags'] + tags)
+    _apply_tags(region, group_ids, tags)
 
 
 def tag_instance_subnet(instance_id, region, tags):
-    pass
+    subnet_id = _aws('ec2', 'describe-instances', '--output', 'text',
+                     '--instance-ids', instance_id, '--region', region,
+                     '--query', ('Reservations[*]'
+                                 '.Instances[*]'
+                                 '.SubnetId')).strip()
+    _apply_tags(region, [subnet_id], tags)
 
 
 def enable_elb(instance_id, region):
