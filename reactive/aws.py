@@ -11,8 +11,8 @@ from charmhelpers.core import hookenv
 from charms.layer.aws import (
     update_credentials_file,
     tag_instance,
-    tag_security_group,
-    tag_subnet,
+    tag_instance_security_group,
+    tag_instance_subnet,
     enable_elb,
     enable_ebs,
     enable_route53,
@@ -52,14 +52,17 @@ def handle_requests():
     aws = endpoint_from_flag('endpoint.aws.requested')
     for request in aws.requests:
         if request.instance_tags:
-            tag_instance(request.instance_id, request.region,
+            tag_instance(request.instance_id,
+                         request.region,
                          request.instance_tags)
-        if request.security_group_tags:
-            tag_security_group(request.instance_id, request.region,
-                               request.security_group_tags)
-        if request.subnet_tags:
-            tag_subnet(request.instance_id, request.region,
-                       request.subnet_tags)
+        if request.instance_security_group_tags:
+            tag_instance_security_group(request.instance_id,
+                                        request.region,
+                                        request.instance_security_group_tags)
+        if request.instance_subnet_tags:
+            tag_instance_subnet(request.instance_id,
+                                request.region,
+                                request.instance_subnet_tags)
         if request.requested_elb:
             enable_elb(request.instance_id, request.region)
         if request.requested_ebs:

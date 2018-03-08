@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 from configparser import ConfigParser
 from pathlib import Path
@@ -25,20 +26,37 @@ def _aws(cmd, subcmd, *args, **kwargs):
     for key, value in kwargs.items():
         cmd.extend(('--{}'.format(key.replace('_', '-')), str(value)))
     cmd.extend(args)
-    subprocess.check_call(cmd)
+    return subprocess.check_output(cmd).decode('utf8')
 
 
 def tag_instance(instance_id, region, tags):
-    _aws('ec2', 'create-tags', '--resources', instance_id, '--region', region,
-         '--tags', *['Key={},Value={}'.format(key, value or '')
-                     for key, value in tags.items()])
+    tags = ['Key={},Value={}'.format(key, value or '')
+            for key, value in tags.items()]
+    _aws(*['ec2', 'create-tags'] +
+          ['--region', region] +
+          ['--resources', instance_id] +
+          ['--tags'] + tags)
 
 
-def tag_security_group(instance_id, region, tags):
-    pass
+def tag_instance_security_group(instance_id, region, tags):
+    groups = _aws('ec2', 'describe-instances', '--output', 'text',
+                  '--instance-ids', instance_id, '--region', region,
+                  '--query', ('Reservations[*]'
+                              '.Instances[*]'
+                              '.SecurityGroups[*]'
+                              '.[GroupId,GroupName]'))
+    groups = [line.split() for line in groups.splitlines()]
+    group_ids = [group_id for group_id, group_name in groups
+                 if re.match(r'^juju-.*-\d+$', group_name)]
+    tags = ['Key={},Value={}'.format(key, value or '')
+            for key, value in tags.items()]
+    _aws(*['ec2', 'create-tags'] +
+          ['--region', region] +
+          ['--resources'] + group_ids +
+          ['--tags'] + tags)
 
 
-def tag_subnet(instance_id, region, tags):
+def tag_instance_subnet(instance_id, region, tags):
     pass
 
 
