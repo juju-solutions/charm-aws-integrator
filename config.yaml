@@ -1,9 +1,15 @@
 options:
-  access_key:
-    description: An IAM access key.
+  access-key:
+    description: |
+      An IAM access key.
+
+      It is strongly recommended that you use `juju trust` instead, if available.
     type: string
     default: ""
-  secret_key:
-    description: An IAM secret key.
+  secret-key:
+    description: |
+      An IAM secret key.
+
+      It is strongly recommended that you use `juju trust` instead, if available.
     type: string
     default: ""
