@@ -1,0 +1,32 @@
+#!/usr/local/sbin/charm-env python3
+
+from charmhelpers.core import hookenv
+from charms.layer import aws as charm_lib
+from reactive import snap
+
+
+try:
+    # ennsure /snap/bin is on the path
+    snap.ensure_path()
+
+    charm_lib.log('Purging all IAM entities')
+
+    # note: roles must be cleaned up before policies
+    role_names = charm_lib._aws(
+        'iam', 'list-roles',
+        '--query', 'Roles[?starts_with(RoleName, `charm-aws-`)].RoleName')
+    for role_name in role_names:
+        charm_lib._cleanup_role(role_name)
+
+    policy_arns = charm_lib._aws(
+        'iam', 'list-policies',
+        '--query', 'Policies[?starts_with(PolicyName, `charm-aws-`)].Arn')
+    for policy_arn in policy_arns:
+        charm_lib._cleanup_policy(policy_arn)
+    hookenv.action_set({
+        'role-removed': ', '.join(role_names),
+        'instance-profiles-removed': ', '.join(role_names),
+        'policies-removed': ', '.join(policy_arns),
+    })
+except charm_lib.AWSError as e:
+    hookenv.action_fail(e.message)
