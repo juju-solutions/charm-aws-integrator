@@ -6,42 +6,37 @@ from charms.reactive import (
     toggle_flag,
     clear_flag,
 )
-from charmhelpers.core import hookenv
 
+from charms.layer import status
 from charms.layer import aws as charm_lib
 
 
-@when_any('config.changed.access_key',
-          'config.changed.secret_key')
-def update_credentials():
-    config = hookenv.config()
-    access_key = config['access_key']
-    secret_key = config['secret_key']
-    charm_lib.update_credentials_file(access_key, secret_key)
-    toggle_flag('charm.aws.has_secrets',
-                access_key and secret_key)
+@when_any('config.changed.access-key',
+          'config.changed.secret-key')
+def update_creds():
+    clear_flag('charm.aws.creds.set')
 
 
-@when_not('charm.aws.has_secrets')
-def no_secrets():
-    hookenv.status_set('blocked', 'cloud credential access required')
+@when_not('charm.aws.creds.set')
+def get_creds():
+    toggle_flag('charm.aws.creds.set', charm_lib.get_credentials())
 
 
 @when_all('snap.installed.aws-cli',
-          'charm.aws.has_secrets')
+          'charm.aws.creds.set')
 @when_not('endpoint.aws.requested')
 def no_requests():
-    hookenv.status_set('maintenance', 'cleaning up unused aws entities')
+    status.maintenance('cleaning up unused aws entities')
     aws = endpoint_from_flag('endpoint.aws.requested')
     charm_lib.cleanup(aws.application_names)
-    hookenv.status_set('active', 'ready')
+    status.active('ready')
 
 
 @when_all('snap.installed.aws-cli',
-          'charm.aws.has_secrets',
+          'charm.aws.creds.set',
           'endpoint.aws.requested')
 def handle_requests():
-    hookenv.status_set('maintenance', 'granting integration requests')
+    status.maintenance('granting integration requests')
     aws = endpoint_from_flag('endpoint.aws.requested')
     for request in aws.requests:
         if request.instance_tags:

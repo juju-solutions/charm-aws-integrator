@@ -3,12 +3,18 @@ import os
 import re
 import sys
 import subprocess
+import yaml
 from time import sleep
 from configparser import ConfigParser
 from pathlib import Path
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.unitdata import kv
+
+from charms.layer import status
+
+
+_roles = None
 
 
 def log(msg, *args):
@@ -17,6 +23,33 @@ def log(msg, *args):
 
 def log_err(msg, *args):
     hookenv.log(msg.format(*args), hookenv.ERROR)
+
+
+def get_credentials():
+    config = hookenv.config()
+    access_key = config['access-key']
+    secret_key = config['secret-key']
+    if not (access_key and secret_key):
+        try:
+            result = subprocess.run(['credential-get'],
+                                    check=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+            creds = yaml.load(result.stdout.decode('utf8'))
+            access_key = creds['credential']['attributes']['access-key']
+            secret_key = creds['credential']['attributes']['secret-key']
+        except subprocess.CalledProcessError as e:
+            if 'permission denied' not in e.stderr.decode('utf8'):
+                raise
+            status.blocked('missing credentials access; '
+                           'grant with: juju trust')
+            return False
+        except FileNotFoundError:
+            status.blocked('missing credentials; '
+                           'set access-key and secret-key config')
+            return False
+    update_credentials_file(access_key, secret_key)
+    return True
 
 
 def update_credentials_file(access_key, secret_key):
@@ -219,9 +252,6 @@ def _get_role_name(application_name, instance_id, region):
     _ensure_role(role_name, application_name)
     _ensure_role_attached(role_name, instance_id, region)
     return role_name
-
-
-_roles = None
 
 
 def _get_roles():
