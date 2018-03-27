@@ -115,7 +115,11 @@ def enable_elb(application_name, instance_id, region):
 
 
 def enable_ebs(application_name, instance_id, region):
-    pass
+    log('Enabling EBS for instance {} of application {} in region {}',
+        instance_id, application_name, region)
+    policy_arn = _get_policy_arn('ebs')
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
 
 
 def enable_route53(application_name, instance_id, region):
