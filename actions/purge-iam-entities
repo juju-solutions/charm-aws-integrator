@@ -1,0 +1,50 @@
+#!/usr/local/sbin/charm-env python3
+
+import os
+from charmhelpers.core import hookenv
+from charms.layer import aws as charm_lib
+from reactive import snap
+
+
+try:
+    # ennsure /snap/bin is on the path
+    snap.ensure_path()
+
+    purge_all = hookenv.action_get('purge-all')
+    model_uuid = os.environ['JUJU_MODEL_UUID']
+
+    if purge_all:
+        charm_lib.log('Purging all IAM entities')
+    else:
+        charm_lib.log('Purging IAM roles and instance-profiles '
+                      'from other models')
+
+    roles = charm_lib._list_roles()
+    instance_profiles = charm_lib._list_instance_profiles()
+    policies = charm_lib._list_policies()
+
+    if not purge_all:
+        roles = [role for role in roles if model_uuid not in role]
+        instance_profiles = [instance_profile
+                             for instance_profile in instance_profiles
+                             if model_uuid not in instance_profile]
+        policies = []
+
+    if not any([roles, instance_profiles, policies]):
+        charm_lib.log('No IAM entities found to purge')
+
+    # note: roles and IPs must be cleaned up before policies
+    for role in roles:
+        charm_lib._cleanup_role(role)
+    for instance_profile in instance_profiles:
+        charm_lib._cleanup_instance_profile(instance_profile)
+    for policy in policies:
+        charm_lib._cleanup_policy(policy)
+
+    hookenv.action_set({
+        'removed-roles': ', '.join(roles),
+        'removed-instance-profiles': ', '.join(instance_profiles),
+        'removed-policies': ', '.join(policies),
+    })
+except charm_lib.AWSError as e:
+    hookenv.action_fail(e.message)
