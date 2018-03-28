@@ -29,8 +29,8 @@ try:
     hookenv.action_set({
         'model-roles': ', '.join(model_roles),
         'model-instance-profiles': ', '.join(model_ips),
-        'model-roles': ', '.join(other_roles),
-        'model-instance-profiles': ', '.join(other_ips),
+        'other-roles': ', '.join(other_roles),
+        'other-instance-profiles': ', '.join(other_ips),
         'policies': ', '.join(policies),
     })
 except charm_lib.AWSError as e:
