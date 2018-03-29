@@ -136,36 +136,64 @@ def enable_s3_write(application_name, instance_id, region):
 
 def cleanup(current_applications):
     log('Looking for unused AWS role and instance-profiles to cleanup')
-    cached_roles = _get_roles()
-    prefix = 'charm-aws-{}-'.format(os.environ['JUJU_MODEL_UUID'])
-    query = 'Roles[?starts_with(RoleName, `{}`)].RoleName'.format(prefix)
-    role_names = _aws('iam', 'list-roles', '--query', query)
+    model_uuid = os.environ['JUJU_MODEL_UUID']
+    prefix = 'charm-aws-{}-'.format(model_uuid)
+    role_names = _list_roles(model_uuid)
+    instance_profile_names = _list_instance_profiles(model_uuid)
     for role_name in role_names:
         application_name = role_name[len(prefix):]
         if application_name not in current_applications:
             log('Found: {}', role_name)
             _cleanup_role(role_name)
-            cached_roles.pop(role_name, None)
-    _update_roles()
+    for instance_profile_name in instance_profile_names:
+        application_name = instance_profile_name[len(prefix):]
+        if application_name not in current_applications:
+            log('Found: {}', instance_profile_name)
+            _cleanup_instance_profile(instance_profile_name)
 
 
 # Internal helpers
 
 
 class AWSError(Exception):
-    def __init__(self, message):
-        self.error_type = None
-        self.message = message
+    @classmethod
+    def get(cls, message):
+        error_type = None
         match = re.match(r'An error occurred \(([^)]+)\)', message)
         if match:
-            self.error_type = match.group(1)
+            error_type = match.group(1)
+        for error_cls in (DoesNotExistAWSError, AlreadyExistsAWSError):
+            if error_type in error_cls.error_types:
+                return error_cls(error_type, message)
+        return AWSError(error_type, message)
+
+    def __init__(self, error_type, message):
+        self.error_type = error_type
+        self.message = message
         super().__init__(message)
 
     def __str__(self):
         return self.message
 
 
-def _aws(cmd, subcmd, *args, ignore_errors=False):
+class DoesNotExistAWSError(AWSError):
+    # meta-error representing something not existing
+    error_types = [
+        'NoSuchEntity',
+        'InvalidParameterValue',
+    ]
+
+
+class AlreadyExistsAWSError(AWSError):
+    # meta-error representing something already existing
+    error_types = [
+        'EntityAlreadyExists',
+        'LimitExceeded',
+        'IncorrectState',
+    ]
+
+
+def _aws(cmd, subcmd, *args):
     cmd = ['aws', '--profile', 'juju', '--output', 'json', cmd, subcmd]
     cmd.extend(args)
     try:
@@ -174,11 +202,56 @@ def _aws(cmd, subcmd, *args, ignore_errors=False):
             output = json.loads(output.decode('utf8'))
         return output
     except subprocess.CalledProcessError as e:
-        ae = AWSError(e.stderr.decode('utf8').strip())
-        if ignore_errors is True or ae.error_type in (ignore_errors or []):
-            return None
-        log_err(ae.message)
+        ae = AWSError.get(e.stderr.decode('utf8').strip())
         raise ae from e
+
+
+def _build_query(collection, filter_attr, return_attr=None, model_uuid=None):
+    if return_attr is None:
+        return_attr = filter_attr
+    if model_uuid is None:
+        prefix = 'charm-aws-'
+    else:
+        prefix = 'charm-aws-{}-'.format(model_uuid)
+    return '{}[?starts_with({}, `{}`)].{}'.format(
+        collection, filter_attr, prefix, return_attr)
+
+
+def _list_roles(model_uuid=None):
+    return _aws('iam', 'list-roles',
+                '--query', _build_query('Roles',
+                                        'RoleName',
+                                        model_uuid=model_uuid))
+
+
+def _list_instance_profiles(model_uuid=None):
+    return _aws('iam', 'list-instance-profiles',
+                '--query', _build_query('InstanceProfiles',
+                                        'InstanceProfileName',
+                                        model_uuid=model_uuid))
+
+
+def _list_policies():
+    return _aws('iam', 'list-policies',
+                '--query', _build_query('Policies', 'PolicyName', 'Arn'))
+
+
+def _retry_for_entity_delay(func):
+    # it sometimes takes AWS a bit for new entities to be available, so this
+    # helper retries an AWS call a few times allowing for NoSuchEntity or
+    # InvalidParameterValue, both of which indicate that an entity is not
+    # available, which may be a temporary state after adding it
+    for attempt in range(4):
+        try:
+            func()
+            break
+        except DoesNotExistAWSError as e:
+            log(e.message)
+            if attempt == 3:
+                raise AWSError('Timed out waiting for entity')
+            delay = 10 * (attempt + 1)
+            log('Retrying in {} seconds', delay)
+            sleep(delay)
 
 
 def _apply_tags(region, resources, tags):
@@ -191,22 +264,15 @@ def _apply_tags(region, resources, tags):
 
 
 def _attach_policy(policy_arn, role_name):
-    for attempt in range(3):
+    def _attach_role_policy():
         try:
-            log('Attaching IAM policy {} to role {}', policy_arn, role_name)
             _aws('iam', 'attach-role-policy',
                  '--policy-arn', policy_arn,
                  '--role-name', role_name)
-            break
-        except AWSError as e:
-            if e.error_type not in {'NoSuchEntity', 'InvalidParameterValue'}:
-                raise
-            # it sometimes takes AWS a bit for new entities to be available
-            delay = 10 * (attempt + 1)
-            log('Retrying in {} seconds', delay)
-            sleep(delay)
-    else:
-        raise AWSError('Timed out waiting for entity')
+            log('Attached IAM policy {} to role {}', policy_arn, role_name)
+        except AlreadyExistsAWSError:
+            pass
+    _retry_for_entity_delay(_attach_role_policy)
 
 
 def _get_account_id():
@@ -226,21 +292,15 @@ def _get_policy_arn(policy_name):
 
 
 def _ensure_policy(policy_name):
-    policies = kv().get('charm.aws.policies', [])
-    if policy_name not in policies:
-        _load_policy(policy_name)
-        policies.append(policy_name)
-        kv().set('charm.aws.policies', policies)
-
-
-def _load_policy(policy_name):
     policy_file = Path('files/policies/{}.json'.format(policy_name[10:]))
     policy_file_url = 'file://{}'.format(policy_file.absolute())
-    log('Loading IAM policy: {}', policy_name)
-    _aws('iam', 'create-policy',
-         '--policy-name', policy_name,
-         '--policy-document', policy_file_url,
-         ignore_errors=['EntityAlreadyExists'])
+    try:
+        _aws('iam', 'create-policy',
+             '--policy-name', policy_name,
+             '--policy-document', policy_file_url)
+        log('Loaded IAM policy: {}', policy_name)
+    except AlreadyExistsAWSError:
+        pass
 
 
 def _get_role_name(application_name, instance_id, region):
@@ -253,118 +313,95 @@ def _get_role_name(application_name, instance_id, region):
                                        application_name[-7:]])
     role_name = 'charm-aws-{}-{}'.format(os.environ['JUJU_MODEL_UUID'],
                                          application_name)
-    _ensure_role(role_name, application_name)
+    _ensure_role(role_name)
     _ensure_role_attached(role_name, instance_id, region)
     return role_name
 
 
-def _get_roles():
-    global _roles
-    if _roles is None:
-        _roles = kv().get('charm.aws.roles', {})
-    return _roles
-
-
-def _update_roles():
-    kv().set('charm.aws.roles', _roles)
-
-
-def _ensure_role(role_name, application_name):
-    roles = _get_roles()
-    if role_name not in roles:
-        _create_role(role_name)
-        roles[role_name] = []
-        _update_roles()
-
-
-def _create_role(role_name):
+def _ensure_role(role_name):
     role_file = Path('files/role.json')
     role_file_url = 'file://{}'.format(role_file.absolute())
-    log('Creating IAM role: {}', role_name)
-    _aws('iam', 'create-role',
-         '--role-name', role_name,
-         '--assume-role-policy-document', role_file_url,
-         ignore_errors=['EntityAlreadyExists'])
-    log('Creating IAM instance-profile: {}', role_name)
-    _aws('iam', 'create-instance-profile',
-         '--instance-profile-name', role_name,
-         ignore_errors=['EntityAlreadyExists'])
-    for attempt in range(3):
+    try:
+        _aws('iam', 'create-role',
+             '--role-name', role_name,
+             '--assume-role-policy-document', role_file_url)
+        log('Created IAM role: {}', role_name)
+    except AlreadyExistsAWSError:
+        pass
+    try:
+        _aws('iam', 'create-instance-profile',
+             '--instance-profile-name', role_name)
+        log('Created IAM instance-profile: {}', role_name)
+    except AlreadyExistsAWSError:
+        pass
+
+    def _add_role_to_instance_profile():
         try:
-            log('Attaching IAM role {} to instance-profile {}',
-                role_name, role_name)
             _aws('iam', 'add-role-to-instance-profile',
                  '--role-name', role_name,
-                 '--instance-profile-name', role_name,
-                 ignore_errors=['LimitExceeded'])  # aka, already added
-            break
-        except AWSError as e:
-            if e.error_type not in {'NoSuchEntity', 'InvalidParameterValue'}:
-                raise
-            # it sometimes takes AWS a bit for new entities to be available
-            delay = 10 * (attempt + 1)
-            log('Retrying in {} seconds', delay)
-            sleep(delay)
-    else:
-        raise AWSError('Timed out waiting for entity')
+                 '--instance-profile-name', role_name)
+            log('Attached IAM role {} to instance-profile {}',
+                role_name, role_name)
+        except AlreadyExistsAWSError:
+            pass
+    _retry_for_entity_delay(_add_role_to_instance_profile)
 
 
 def _ensure_role_attached(role_name, instance_id, region):
-    roles = _get_roles()
-    instance_key = '{}-{}'.format(instance_id, region)
-    if instance_key not in roles[role_name]:
-        _attach_role(role_name, instance_id, region)
-        roles[role_name].append(instance_key)
-        _update_roles()
-
-
-def _attach_role(role_name, instance_id, region):
-    for attempt in range(3):
+    def _associate_iam_instance_profile():
         try:
-            log('Attaching IAM instance-profile {} to instance {} '
-                'in region {}', role_name, instance_id, region)
             _aws('ec2', 'associate-iam-instance-profile',
                  '--iam-instance-profile', 'Name={}'.format(role_name),
                  '--instance-id', instance_id,
-                 '--region', region,
-                 ignore_errors=['IncorrectState'])  # aka, already attached
-            break
-        except AWSError as e:
-            if e.error_type not in {'NoSuchEntity', 'InvalidParameterValue'}:
-                raise
-            # it sometimes takes AWS a bit for new entities to be available
-            delay = 10 * (attempt + 1)
-            log('Retrying in {} seconds', delay)
-            sleep(delay)
-    else:
-        raise AWSError('Timed out waiting for entity')
+                 '--region', region)
+            log('Attached IAM instance-profile {} to instance {} '
+                'in region {}', role_name, instance_id, region)
+        except AlreadyExistsAWSError:
+            pass
+    _retry_for_entity_delay(_associate_iam_instance_profile)
 
 
 def _cleanup_role(role_name):
-    policies = _aws('iam', 'list-attached-role-policies',
-                    '--role-name', role_name,
-                    '--query', 'AttachedPolicies[*].PolicyArn')
+    try:
+        policies = _aws('iam', 'list-attached-role-policies',
+                        '--role-name', role_name,
+                        '--query', 'AttachedPolicies[*].PolicyArn')
+    except DoesNotExistAWSError:
+        policies = []
     for policy_arn in policies:
-        log('Detaching IAM policy {} from role {}', policy_arn, role_name)
-        _aws('iam', 'detach-role-policy',
+        try:
+            _aws('iam', 'detach-role-policy',
+                 '--role-name', role_name,
+                 '--policy-arn', policy_arn)
+            log('Detached IAM policy {} from role {}', policy_arn, role_name)
+        except DoesNotExistAWSError:
+            pass
+    try:
+        _aws('iam', 'remove-role-from-instance-profile',
              '--role-name', role_name,
-             '--policy-arn', policy_arn)
-    log('Detaching IAM role from instance-profile {}', role_name, role_name)
-    _aws('iam', 'remove-role-from-instance-profile',
-         '--role-name', role_name,
-         '--instance-profile-name', role_name,
-         ignore_errors=['NoSuchEntity'])
-    log('Deleting IAM role {}', role_name)
-    _aws('iam', 'delete-role',
-         '--role-name', role_name,
-         ignore_errors=['NoSuchEntity'])
-    log('Deleting IAM instance-profile {}', role_name)
-    _aws('iam', 'delete-instance-profile',
-         '--instance-profile-name', role_name,
-         ignore_errors=['NoSuchEntity'])
+             '--instance-profile-name', role_name)
+        log('Detached IAM role {} from instance-profile {}',
+            role_name, role_name)
+    except DoesNotExistAWSError:
+        pass
+    try:
+        _aws('iam', 'delete-role',
+             '--role-name', role_name)
+        log('Deleted IAM role {}', role_name)
+    except DoesNotExistAWSError:
+        pass
+
+
+def _cleanup_instance_profile(instance_profile_name):
+    try:
+        _aws('iam', 'delete-instance-profile',
+             '--instance-profile-name', instance_profile_name)
+        log('Deleted IAM instance-profile {}', instance_profile_name)
+    except DoesNotExistAWSError:
+        pass
 
 
 def _cleanup_policy(policy_arn):
-    log('Deleting IAM policy {}', policy_arn)
     _aws('iam', 'delete-policy',
          '--policy-arn', policy_arn)
+    log('Deleted IAM policy {}', policy_arn)

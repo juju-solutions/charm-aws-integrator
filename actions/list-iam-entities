@@ -1,0 +1,37 @@
+#!/usr/local/sbin/charm-env python3
+
+import os
+from charmhelpers.core import hookenv
+from charms.layer import aws as charm_lib
+from reactive import snap
+
+
+def partition_by_model(model_uuid, entities):
+    return (
+        [entity for entity in entities if model_uuid in entity],
+        [entity for entity in entities if model_uuid not in entity],
+    )
+
+
+try:
+    # ennsure /snap/bin is on the path
+    snap.ensure_path()
+
+    model_uuid = os.environ['JUJU_MODEL_UUID']
+
+    roles = charm_lib._list_roles()
+    instance_profiles = charm_lib._list_instance_profiles()
+    policies = charm_lib._list_policies()
+
+    model_roles, other_roles = partition_by_model(model_uuid, roles)
+    model_ips, other_ips = partition_by_model(model_uuid, instance_profiles)
+
+    hookenv.action_set({
+        'model-roles': ', '.join(model_roles),
+        'model-instance-profiles': ', '.join(model_ips),
+        'other-roles': ', '.join(other_roles),
+        'other-instance-profiles': ', '.join(other_ips),
+        'policies': ', '.join(policies),
+    })
+except charm_lib.AWSError as e:
+    hookenv.action_fail(e.message)

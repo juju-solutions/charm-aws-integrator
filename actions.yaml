@@ -1,8 +1,25 @@
-purge-all-iam-entities:
+list-iam-entities:
   description: |
-    Purge all IAM entities created by this charm, such as roles,
-    instance-profiles, and policies.
+    List IAM entities created by this charm, such as roles, instance-profiles,
+    and policies.
+purge-iam-entities:
+  description: |
+    Purge IAM entities created by this charm, such as roles and
+    instance-profiles.
 
-    Be careful!  This includes entities created in other models,
-    and even roles and instance-profiles that are in active use.
-    This can break applications depending on their permissions!
+    Be careful! There is no way for this action to determine if entities
+    created in other models are in active use. Running this action while there
+    are entities in use will likely break the applications depending on those
+    permissions.
+  params:
+    purge-all:
+      description: |
+        By default, this action excludes policies (which are global), as well
+        as roles and instance-profiles from the current model (which are
+        actively cleaned up when no longer in use). Setting this parameter to
+        true will purge everything.
+
+        This is even more likely to break things, including applications in the
+        current model!
+      type: boolean
+      default: false
