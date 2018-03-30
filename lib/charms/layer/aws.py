@@ -4,6 +4,7 @@ import re
 import sys
 import subprocess
 import yaml
+from math import ceil, floor
 from time import sleep
 from configparser import ConfigParser
 from pathlib import Path
@@ -14,7 +15,10 @@ from charmhelpers.core.unitdata import kv
 from charms.layer import status
 
 
-_roles = None
+ENTITY_PREFIX = 'charm.aws'
+MODEL_UUID = os.environ['JUJU_MODEL_UUID']
+MAX_ROLE_NAME_LEN = 64
+MAX_POLICY_NAME_LEN = 128
 
 
 def log(msg, *args):
@@ -130,30 +134,51 @@ def enable_route53(application_name, instance_id, region):
     _attach_policy(policy_arn, role_name)
 
 
-def enable_s3_read(application_name, instance_id, region):
-    pass
+def enable_s3_read(application_name, instance_id, region, patterns):
+    log('Enabling S3 read for instance {} of application {} in region {}',
+        instance_id, application_name, region)
+    policy_name = 's3-read'
+    if patterns:
+        policy_name = _restrict_policy_for_app(policy_name,
+                                               application_name,
+                                               patterns)
+    policy_arn = _get_policy_arn(policy_name)
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
+    if patterns:
+        _add_app_entity(application_name, 'policy', policy_arn)
 
 
-def enable_s3_write(application_name, instance_id, region):
-    pass
+def enable_s3_write(application_name, instance_id, region, patterns):
+    log('Enabling S3 write for instance {} of application {} in region {}',
+        instance_id, application_name, region)
+    policy_name = 's3-write'
+    if patterns:
+        policy_name = _restrict_policy_for_app(policy_name,
+                                               application_name,
+                                               patterns)
+    policy_arn = _get_policy_arn(policy_name)
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
+    if patterns:
+        _add_app_entity(application_name, 'policy', policy_arn)
 
 
 def cleanup(current_applications):
-    log('Looking for unused AWS role and instance-profiles to cleanup')
-    model_uuid = os.environ['JUJU_MODEL_UUID']
-    prefix = 'charm-aws-{}-'.format(model_uuid)
-    role_names = _list_roles(model_uuid)
-    instance_profile_names = _list_instance_profiles(model_uuid)
-    for role_name in role_names:
-        application_name = role_name[len(prefix):]
-        if application_name not in current_applications:
-            log('Found: {}', role_name)
-            _cleanup_role(role_name)
-    for instance_profile_name in instance_profile_names:
-        application_name = instance_profile_name[len(prefix):]
-        if application_name not in current_applications:
-            log('Found: {}', instance_profile_name)
-            _cleanup_instance_profile(instance_profile_name)
+    managed_entities = _get_managed_entities()
+    departed_applications = managed_entities.keys() - current_applications
+    if not departed_applications:
+        return
+    log('Cleaning up unused AWS entities')
+    for app in departed_applications:
+        entities = managed_entities.pop(app)
+        for role in entities['role']:
+            _cleanup_role(role)
+        for instance_profile in entities['instance-profile']:
+            _cleanup_instance_profile(instance_profile)
+        for policy in entities['policy']:
+            _cleanup_policy(policy)
+    _set_managed_entities(managed_entities)
 
 
 # Internal helpers
@@ -197,6 +222,15 @@ class AlreadyExistsAWSError(AWSError):
     ]
 
 
+def _elide(s, max_len):
+    # elide s in the middle to ensure it is under max_len
+    if len(s) > max_len:
+        hl = len(s - 3) / 2  # sub 3 for ellipsis
+        headl, taill = floor(hl), ceil(hl)
+        s = s[:headl] + '...' + s[-taill:]
+    return s
+
+
 def _aws(cmd, subcmd, *args):
     cmd = ['aws', '--profile', 'juju', '--output', 'json', cmd, subcmd]
     cmd.extend(args)
@@ -214,9 +248,9 @@ def _build_query(collection, filter_attr, return_attr=None, model_uuid=None):
     if return_attr is None:
         return_attr = filter_attr
     if model_uuid is None:
-        prefix = 'charm-aws-'
+        prefix = '{}.'.format(ENTITY_PREFIX)
     else:
-        prefix = 'charm-aws-{}-'.format(model_uuid)
+        prefix = '{}.{}.'.format(ENTITY_PREFIX, model_uuid)
     return '{}[?starts_with({}, `{}`)].{}'.format(
         collection, filter_attr, prefix, return_attr)
 
@@ -235,9 +269,32 @@ def _list_instance_profiles(model_uuid=None):
                                         model_uuid=model_uuid))
 
 
-def _list_policies():
+def _list_policies(model_uuid=None):
     return _aws('iam', 'list-policies',
-                '--query', _build_query('Policies', 'PolicyName', 'Arn'))
+                '--query', _build_query('Policies',
+                                        'PolicyName',
+                                        'Arn',
+                                        model_uuid=model_uuid))
+
+
+def _get_managed_entities():
+    return kv().get('charm.aws.managed-entities', {})
+
+
+def _add_app_entity(app_name, entity_type, entity_name):
+    managed_entities = _get_managed_entities()
+    app_entities = managed_entities.setdefault(app_name, {
+        'role': [],
+        'instance-profile': [],
+        'policy': [],
+    })
+    if entity_name not in app_entities[entity_type]:
+        app_entities[entity_type].append(entity_name)
+        _set_managed_entities(managed_entities)
+
+
+def _set_managed_entities(managed_entities):
+        kv().set('charm.aws.managed-entities', managed_entities)
 
 
 def _retry_for_entity_delay(func):
@@ -289,7 +346,7 @@ def _get_account_id():
 
 
 def _get_policy_arn(policy_name):
-    policy_name = 'charm-aws-{}'.format(policy_name)
+    policy_name = 'charm.aws.{}'.format(policy_name)
     account_id = _get_account_id()
     _ensure_policy(policy_name)
     return 'arn:aws:iam::{}:policy/{}'.format(account_id, policy_name)
@@ -308,21 +365,16 @@ def _ensure_policy(policy_name):
 
 
 def _get_role_name(application_name, instance_id, region):
-    if len(application_name) > 17:
-        # role names can be max 64 characters, and application name length is
-        # effective arbitrary, so elide it down to 17 chars (prefix + UUID
-        # take up 47 chars, and adding the ellipsis in the middle should make
-        # it less likely to conflict than truncating)
-        application_name = '...'.join([application_name[:7],
-                                       application_name[-7:]])
-    role_name = 'charm-aws-{}-{}'.format(os.environ['JUJU_MODEL_UUID'],
-                                         application_name)
-    _ensure_role(role_name)
+    prefix = '{}.{}.'.format(ENTITY_PREFIX, MODEL_UUID)
+    max_app_name_len = MAX_ROLE_NAME_LEN - len(prefix)
+    app_name = _elide(application_name, max_app_name_len)
+    role_name = prefix + app_name
+    _ensure_role(application_name, role_name)
     _ensure_role_attached(role_name, instance_id, region)
     return role_name
 
 
-def _ensure_role(role_name):
+def _ensure_role(application_name, role_name):
     role_file = Path('files/role.json')
     role_file_url = 'file://{}'.format(role_file.absolute())
     try:
@@ -332,12 +384,14 @@ def _ensure_role(role_name):
         log('Created IAM role: {}', role_name)
     except AlreadyExistsAWSError:
         pass
+    _add_app_entity(application_name, 'role', role_name)
     try:
         _aws('iam', 'create-instance-profile',
              '--instance-profile-name', role_name)
         log('Created IAM instance-profile: {}', role_name)
     except AlreadyExistsAWSError:
         pass
+    _add_app_entity(application_name, 'instance-profile', role_name)
 
     def _add_role_to_instance_profile():
         try:
@@ -363,6 +417,19 @@ def _ensure_role_attached(role_name, instance_id, region):
         except AlreadyExistsAWSError:
             pass
     _retry_for_entity_delay(_associate_iam_instance_profile)
+
+
+def _restrict_policy_for_app(policy_name, application_name, patterns):
+    non_app_name = '{}.{}..{}'.format(ENTITY_PREFIX, MODEL_UUID, policy_name)
+    max_app_name_len = (MAX_POLICY_NAME_LEN - len(non_app_name))
+    app_name = _elide(application_name, max_app_name_len)
+    app_policy_name = '{}.{}.{}'.format(MODEL_UUID, app_name, policy_name)
+    policy_file_src = Path('files/policies/{}.json'.format(policy_name))
+    policy_file_dst = Path('files/policies/{}.json'.format(app_policy_name))
+    policy_data = json.loads(policy_file_src.read_text())
+    policy_data['Statement'][0]['Resource'] = patterns
+    policy_file_dst.write_text(json.dumps(policy_data))
+    return app_policy_name
 
 
 def _cleanup_role(role_name):
@@ -406,6 +473,9 @@ def _cleanup_instance_profile(instance_profile_name):
 
 
 def _cleanup_policy(policy_arn):
-    _aws('iam', 'delete-policy',
-         '--policy-arn', policy_arn)
-    log('Deleted IAM policy {}', policy_arn)
+    try:
+        _aws('iam', 'delete-policy',
+             '--policy-arn', policy_arn)
+        log('Deleted IAM policy {}', policy_arn)
+    except DoesNotExistAWSError:
+        pass

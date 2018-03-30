@@ -73,11 +73,13 @@ def handle_requests():
             charm_lib.enable_s3_read(
                 request.application_name,
                 request.instance_id,
-                request.region)
+                request.region,
+                request.s3_read_patterns)
         if request.requested_s3_write:
             charm_lib.enable_s3_write(
                 request.application_name,
                 request.instance_id,
-                request.region)
+                request.region,
+                request.s3_write_patterns)
         request.mark_completed()
     clear_flag('endpoint.aws.requested')
