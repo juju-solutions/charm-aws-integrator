@@ -46,6 +46,7 @@ def handle_requests():
                 request.instance_tags)
         if request.unit_security_group_tags:
             charm_lib.tag_unit_security_group(
+                request.application_name,
                 request.instance_id,
                 request.region,
                 request.unit_security_group_tags)
@@ -73,11 +74,13 @@ def handle_requests():
             charm_lib.enable_s3_read(
                 request.application_name,
                 request.instance_id,
-                request.region)
+                request.region,
+                request.s3_read_patterns)
         if request.requested_s3_write:
             charm_lib.enable_s3_write(
                 request.application_name,
                 request.instance_id,
-                request.region)
+                request.region,
+                request.s3_write_patterns)
         request.mark_completed()
     clear_flag('endpoint.aws.requested')
