@@ -89,7 +89,7 @@ def tag_instance(instance_id, region, tags):
     _apply_tags(region, [instance_id], tags)
 
 
-def tag_unit_security_group(instance_id, region, tags):
+def tag_unit_security_group(application_name, instance_id, region, tags):
     """
     Tag the one security group that Juju created for the unit deployed to the
     given instance with the given tags.
@@ -102,9 +102,10 @@ def tag_unit_security_group(instance_id, region, tags):
                              '.SecurityGroups[*]'
                              '.[GroupId,GroupName]'
                              '[][]')
+    pattern = re.compile(r'^juju-{}-\d+$'.format(application_name))
     groups = {group_name: group_id
               for group_id, group_name in groups
-              if re.match(r'^juju-.*-\d+$', group_name)}
+              if pattern.match(group_name)}
     if len(groups) != 1:
         log_err('Got unexpected number of security groups: {}', groups)
         sys.exit(1)

@@ -46,6 +46,7 @@ def handle_requests():
                 request.instance_tags)
         if request.unit_security_group_tags:
             charm_lib.tag_unit_security_group(
+                request.application_name,
                 request.instance_id,
                 request.region,
                 request.unit_security_group_tags)
