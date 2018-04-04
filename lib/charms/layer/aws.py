@@ -30,6 +30,11 @@ def log_err(msg, *args):
 
 
 def get_credentials():
+    """
+    Get the credentials from either the config or the hook tool.
+
+    Prefers the config so that it can be overridden.
+    """
     config = hookenv.config()
     access_key = config['access-key']
     secret_key = config['secret-key']
@@ -57,6 +62,9 @@ def get_credentials():
 
 
 def update_credentials_file(access_key, secret_key):
+    """
+    Write the credentials to the config file for the aws-cli tool.
+    """
     conf_dir = Path('/root/.aws')
     conf_dir.mkdir(0o700, exist_ok=True)
     conf_file = conf_dir / 'credentials'
@@ -73,11 +81,18 @@ def update_credentials_file(access_key, secret_key):
 
 
 def tag_instance(instance_id, region, tags):
+    """
+    Tag the given instance with the given tags.
+    """
     log('Tagging instance {} in {} with: {}', instance_id, region, tags)
     _apply_tags(region, [instance_id], tags)
 
 
 def tag_unit_security_group(instance_id, region, tags):
+    """
+    Tag the one security group that Juju created for the unit deployed to the
+    given instance with the given tags.
+    """
     groups = _aws('ec2', 'describe-instances',
                   '--instance-ids', instance_id,
                   '--region', region,
@@ -99,6 +114,9 @@ def tag_unit_security_group(instance_id, region, tags):
 
 
 def tag_instance_subnet(instance_id, region, tags):
+    """
+    Tag the subnet for the given instance with the given tags.
+    """
     log('Tagging subnet for instance {} in {} with: {}',
         instance_id, region, tags)
     subnet_id = _aws('ec2', 'describe-instances',
@@ -111,6 +129,9 @@ def tag_instance_subnet(instance_id, region, tags):
 
 
 def enable_elb(application_name, instance_id, region):
+    """
+    Enable Elastic LoadBalancer access for the given instance.
+    """
     log('Enabling ELB for instance {} of application {} in region {}',
         instance_id, application_name, region)
     policy_arn = _get_policy_arn('elb')
@@ -119,6 +140,9 @@ def enable_elb(application_name, instance_id, region):
 
 
 def enable_ebs(application_name, instance_id, region):
+    """
+    Enable Elastic Block Storage access for the given instance.
+    """
     log('Enabling EBS for instance {} of application {} in region {}',
         instance_id, application_name, region)
     policy_arn = _get_policy_arn('ebs')
@@ -127,6 +151,9 @@ def enable_ebs(application_name, instance_id, region):
 
 
 def enable_route53(application_name, instance_id, region):
+    """
+    Enable Route53 access for the given instance.
+    """
     log('Enabling Route53 for instance {} of application {} in region {}',
         instance_id, application_name, region)
     policy_arn = _get_policy_arn('route53')
@@ -135,6 +162,10 @@ def enable_route53(application_name, instance_id, region):
 
 
 def enable_s3_read(application_name, instance_id, region, patterns):
+    """
+    Enable S3 read-only access for the given instance to resources matching
+    the given patterns.
+    """
     log('Enabling S3 read for instance {} of application {} in region {}',
         instance_id, application_name, region)
     policy_name = 's3-read'
@@ -150,6 +181,10 @@ def enable_s3_read(application_name, instance_id, region, patterns):
 
 
 def enable_s3_write(application_name, instance_id, region, patterns):
+    """
+    Enable S3 full access for the given instance to resources matching
+    the given patterns.
+    """
     log('Enabling S3 write for instance {} of application {} in region {}',
         instance_id, application_name, region)
     policy_name = 's3-write'
@@ -165,6 +200,10 @@ def enable_s3_write(application_name, instance_id, region, patterns):
 
 
 def cleanup(current_applications):
+    """
+    Cleanup unused IAM entities from the current model that are being managed
+    by this charm instance.
+    """
     managed_entities = _get_managed_entities()
     departed_applications = managed_entities.keys() - current_applications
     if not departed_applications:
@@ -185,8 +224,17 @@ def cleanup(current_applications):
 
 
 class AWSError(Exception):
+    """
+    Exception class representing an error returned from the aws-cli tool.
+
+    Includes an `error_type` field to distinguish the different error cases.
+    """
     @classmethod
     def get(cls, message):
+        """
+        Factory method to create either an instance of this class or a
+        meta-subclass for certain `error_type`s.
+        """
         error_type = None
         match = re.match(r'An error occurred \(([^)]+)\)', message)
         if match:
@@ -206,7 +254,9 @@ class AWSError(Exception):
 
 
 class DoesNotExistAWSError(AWSError):
-    # meta-error representing something not existing
+    """
+    Meta-error subclass of AWSError representing something not existing.
+    """
     error_types = [
         'NoSuchEntity',
         'InvalidParameterValue',
@@ -214,7 +264,9 @@ class DoesNotExistAWSError(AWSError):
 
 
 class AlreadyExistsAWSError(AWSError):
-    # meta-error representing something already existing
+    """
+    Meta-error subclass of AWSError representing something already existing.
+    """
     error_types = [
         'EntityAlreadyExists',
         'LimitExceeded',
@@ -223,7 +275,12 @@ class AlreadyExistsAWSError(AWSError):
 
 
 def _elide(s, max_len):
-    # elide s in the middle to ensure it is under max_len
+    """
+    Elide s in the middle to ensure it is under max_len.
+
+    That is, shorten the string, inserting an ellipsis where the removed
+    characters were to show that they've been removed.
+    """
     if len(s) > max_len:
         hl = len(s - 3) / 2  # sub 3 for ellipsis
         headl, taill = floor(hl), ceil(hl)
@@ -232,6 +289,9 @@ def _elide(s, max_len):
 
 
 def _aws(cmd, subcmd, *args):
+    """
+    Call the aws-cli tool.
+    """
     cmd = ['aws', '--profile', 'juju', '--output', 'json', cmd, subcmd]
     cmd.extend(args)
     try:
@@ -245,6 +305,9 @@ def _aws(cmd, subcmd, *args):
 
 
 def _build_query(collection, filter_attr, return_attr=None, model_uuid=None):
+    """
+    Build an entity filter query for the aws-cli tool.
+    """
     if return_attr is None:
         return_attr = filter_attr
     if model_uuid is None:
@@ -256,6 +319,9 @@ def _build_query(collection, filter_attr, return_attr=None, model_uuid=None):
 
 
 def _list_roles(model_uuid=None):
+    """
+    Helper to list IAM roles, optionally filtering to the given model.
+    """
     return _aws('iam', 'list-roles',
                 '--query', _build_query('Roles',
                                         'RoleName',
@@ -263,6 +329,10 @@ def _list_roles(model_uuid=None):
 
 
 def _list_instance_profiles(model_uuid=None):
+    """
+    Helper to list IAM instance-profiles, optionally filtering to the given
+    model.
+    """
     return _aws('iam', 'list-instance-profiles',
                 '--query', _build_query('InstanceProfiles',
                                         'InstanceProfileName',
@@ -270,6 +340,9 @@ def _list_instance_profiles(model_uuid=None):
 
 
 def _list_policies(model_uuid=None):
+    """
+    Helper to list IAM policies, optionally filtering to the given model.
+    """
     return _aws('iam', 'list-policies',
                 '--query', _build_query('Policies',
                                         'PolicyName',
@@ -278,10 +351,16 @@ def _list_policies(model_uuid=None):
 
 
 def _get_managed_entities():
+    """
+    Get the set of IAM entities managed by this charm instance.
+    """
     return kv().get('charm.aws.managed-entities', {})
 
 
 def _add_app_entity(app_name, entity_type, entity_name):
+    """
+    Add an IAM entity to the set managed by this charm instance.
+    """
     managed_entities = _get_managed_entities()
     app_entities = managed_entities.setdefault(app_name, {
         'role': [],
@@ -294,14 +373,22 @@ def _add_app_entity(app_name, entity_type, entity_name):
 
 
 def _set_managed_entities(managed_entities):
-        kv().set('charm.aws.managed-entities', managed_entities)
+    """
+    Update the cached set of IAM entities managed by this charm instance.
+    """
+    kv().set('charm.aws.managed-entities', managed_entities)
 
 
 def _retry_for_entity_delay(func):
-    # it sometimes takes AWS a bit for new entities to be available, so this
-    # helper retries an AWS call a few times allowing for NoSuchEntity or
-    # InvalidParameterValue, both of which indicate that an entity is not
-    # available, which may be a temporary state after adding it
+    """
+    Retry the given function a few times if it raises a DoesNotExistAWSError
+    with an increasing delay.
+
+    It sometimes takes AWS a bit for new entities to be available, so this
+    helper retries an AWS call a few times allowing for any of the errors
+    that indicate that an entity is not available, which may be a temporary
+    state after adding it.
+    """
     for attempt in range(4):
         try:
             func()
@@ -316,6 +403,9 @@ def _retry_for_entity_delay(func):
 
 
 def _apply_tags(region, resources, tags):
+    """
+    Apply the given tags to the given EC2 resources.
+    """
     tags = ['Key={},Value={}'.format(key, value or '')
             for key, value in tags.items()]
     _aws(*['ec2', 'create-tags'] +
@@ -325,6 +415,9 @@ def _apply_tags(region, resources, tags):
 
 
 def _attach_policy(policy_arn, role_name):
+    """
+    Ensure that the given IAM policy is attached to the given IAM role.
+    """
     def _attach_role_policy():
         try:
             _aws('iam', 'attach-role-policy',
@@ -337,6 +430,9 @@ def _attach_policy(policy_arn, role_name):
 
 
 def _get_account_id():
+    """
+    Get the AWS account ID.
+    """
     account_id = kv().get('charm.aws.account-id')
     if not account_id:
         account_id = _aws('sts', 'get-caller-identity',
@@ -346,6 +442,9 @@ def _get_account_id():
 
 
 def _get_policy_arn(policy_name):
+    """
+    Translate a short policy name into an ARN and ensure that it is loaded.
+    """
     policy_name = 'charm.aws.{}'.format(policy_name)
     account_id = _get_account_id()
     _ensure_policy(policy_name)
@@ -353,6 +452,9 @@ def _get_policy_arn(policy_name):
 
 
 def _ensure_policy(policy_name):
+    """
+    Ensure that the given policy is loaded into AWS.
+    """
     policy_file = Path('files/policies/{}.json'.format(policy_name[10:]))
     policy_file_url = 'file://{}'.format(policy_file.absolute())
     try:
@@ -365,6 +467,10 @@ def _ensure_policy(policy_name):
 
 
 def _get_role_name(application_name, instance_id, region):
+    """
+    Get the instance-specific role name and ensure that it and the
+    instance-profile exist and are connected up properly in AWS.
+    """
     prefix = '{}.{}.'.format(ENTITY_PREFIX, MODEL_UUID)
     max_app_name_len = MAX_ROLE_NAME_LEN - len(prefix)
     app_name = _elide(application_name, max_app_name_len)
@@ -375,6 +481,9 @@ def _get_role_name(application_name, instance_id, region):
 
 
 def _ensure_role(application_name, role_name):
+    """
+    Ensure that the given role is created in AWS.
+    """
     role_file = Path('files/role.json')
     role_file_url = 'file://{}'.format(role_file.absolute())
     try:
@@ -406,6 +515,9 @@ def _ensure_role(application_name, role_name):
 
 
 def _ensure_role_attached(role_name, instance_id, region):
+    """
+    Ensure that the given role is attached the corresponding instance-profile.
+    """
     def _associate_iam_instance_profile():
         try:
             _aws('ec2', 'associate-iam-instance-profile',
@@ -420,6 +532,10 @@ def _ensure_role_attached(role_name, instance_id, region):
 
 
 def _restrict_policy_for_app(policy_name, application_name, patterns):
+    """
+    Modify one of the general policies with application-specific resource
+    patterns and return the new policy name.
+    """
     non_app_name = '{}.{}..{}'.format(ENTITY_PREFIX, MODEL_UUID, policy_name)
     max_app_name_len = (MAX_POLICY_NAME_LEN - len(non_app_name))
     app_name = _elide(application_name, max_app_name_len)
@@ -433,6 +549,9 @@ def _restrict_policy_for_app(policy_name, application_name, patterns):
 
 
 def _cleanup_role(role_name):
+    """
+    Cleanup an IAM role.
+    """
     try:
         policies = _aws('iam', 'list-attached-role-policies',
                         '--role-name', role_name,
@@ -464,6 +583,9 @@ def _cleanup_role(role_name):
 
 
 def _cleanup_instance_profile(instance_profile_name):
+    """
+    Cleanup an IAM instance-profile.
+    """
     try:
         _aws('iam', 'delete-instance-profile',
              '--instance-profile-name', instance_profile_name)
@@ -473,6 +595,9 @@ def _cleanup_instance_profile(instance_profile_name):
 
 
 def _cleanup_policy(policy_arn):
+    """
+    Cleanup an IAM policy.
+    """
     try:
         _aws('iam', 'delete-policy',
              '--policy-arn', policy_arn)
