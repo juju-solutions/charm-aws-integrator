@@ -3,11 +3,12 @@ import os
 import re
 import sys
 import subprocess
-import yaml
 from math import ceil, floor
 from time import sleep
 from configparser import ConfigParser
 from pathlib import Path
+
+import yaml
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.unitdata import kv
@@ -396,7 +397,7 @@ def _retry_for_entity_delay(func):
         except DoesNotExistAWSError as e:
             log(e.message)
             if attempt == 3:
-                raise AWSError('Timed out waiting for entity')
+                raise AWSError(None, 'Timed out waiting for entity')
             delay = 10 * (attempt + 1)
             log('Retrying in {} seconds', delay)
             sleep(delay)
@@ -408,10 +409,10 @@ def _apply_tags(region, resources, tags):
     """
     tags = ['Key={},Value={}'.format(key, value or '')
             for key, value in tags.items()]
-    _aws(*['ec2', 'create-tags'] +
-          ['--region', region] +
-          ['--resources'] + resources +
-          ['--tags'] + tags)
+    _aws(*(['ec2', 'create-tags'] +
+           ['--region', region] +
+           ['--resources'] + resources +
+           ['--tags'] + tags))
 
 
 def _attach_policy(policy_arn, role_name):
