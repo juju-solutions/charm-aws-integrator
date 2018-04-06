@@ -89,9 +89,9 @@ def tag_instance(instance_id, region, tags):
     _apply_tags(region, [instance_id], tags)
 
 
-def tag_unit_security_group(instance_id, region, tags):
+def tag_instance_security_group(instance_id, region, tags):
     """
-    Tag the one security group that Juju created for the unit deployed to the
+    Tag the instance-specific security group that Juju created for the
     given instance with the given tags.
     """
     groups = _aws('ec2', 'describe-instances',
@@ -127,6 +127,31 @@ def tag_instance_subnet(instance_id, region, tags):
                                 '.Instances[*]'
                                 '.SubnetId[] | [0]')
     _apply_tags(region, [subnet_id], tags)
+
+
+def enable_instance_inspection(application_name, instance_id, region):
+    """
+    Enable instance inspection access for the given instance.
+    """
+    log('Enabling instance inspection for instance {} '
+        'of application {} in region {}',
+        instance_id, application_name, region)
+    policy_arn = _get_policy_arn('instance-inspection')
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
+
+
+def enable_network_management(application_name, instance_id, region):
+    """
+    Enable network (firewall, subnet, etc.) management access for the given
+    instance.
+    """
+    log('Enabling network management for instance {} '
+        'of application {} in region {}',
+        instance_id, application_name, region)
+    policy_arn = _get_policy_arn('network-management')
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
 
 
 def enable_elb(application_name, instance_id, region):

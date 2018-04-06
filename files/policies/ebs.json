@@ -3,7 +3,12 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": "ec2:DescribeVolume*",
+      "Action": "ec2:DescribeVolumes",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ec2:CreateVolume",
       "Resource": "*"
     },
     {
@@ -14,6 +19,11 @@
     {
       "Effect": "Allow",
       "Action": "ec2:DetachVolume",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ec2:DeleteVolume",
       "Resource": "*"
     }
   ]

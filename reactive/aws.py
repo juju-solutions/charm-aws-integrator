@@ -38,21 +38,32 @@ def handle_requests():
     layer.status.maintenance('granting integration requests')
     aws = endpoint_from_flag('endpoint.aws.requested')
     for request in aws.requests:
+        layer.aws.log('Granting request for {}'.format(request.unit_name))
         if request.instance_tags:
             layer.aws.tag_instance(
                 request.instance_id,
                 request.region,
                 request.instance_tags)
-        if request.unit_security_group_tags:
-            layer.aws.tag_unit_security_group(
+        if request.instance_security_group_tags:
+            layer.aws.tag_instance_security_group(
                 request.instance_id,
                 request.region,
-                request.unit_security_group_tags)
+                request.instance_security_group_tags)
         if request.instance_subnet_tags:
             layer.aws.tag_instance_subnet(
                 request.instance_id,
                 request.region,
                 request.instance_subnet_tags)
+        if request.requested_instance_inspection:
+            layer.aws.enable_instance_inspection(
+                request.application_name,
+                request.instance_id,
+                request.region)
+        if request.requested_network_management:
+            layer.aws.enable_network_management(
+                request.application_name,
+                request.instance_id,
+                request.region)
         if request.requested_elb:
             layer.aws.enable_elb(
                 request.application_name,
@@ -80,5 +91,6 @@ def handle_requests():
                 request.instance_id,
                 request.region,
                 request.s3_write_patterns)
+        layer.aws.log('Finished request for {}'.format(request.unit_name))
         request.mark_completed()
     clear_flag('endpoint.aws.requested')
