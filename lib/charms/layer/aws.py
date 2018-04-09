@@ -143,7 +143,7 @@ def enable_instance_inspection(application_name, instance_id, region):
 
 def enable_network_management(application_name, instance_id, region):
     """
-    Enable network (firewall, subnet, etc.) management access for the given
+    Enable network (firewall, subnet, etc.) management for the given
     instance.
     """
     log('Enabling network management for instance {} '
@@ -154,9 +154,9 @@ def enable_network_management(application_name, instance_id, region):
     _attach_policy(policy_arn, role_name)
 
 
-def enable_elb(application_name, instance_id, region):
+def enable_load_balancer_management(application_name, instance_id, region):
     """
-    Enable Elastic LoadBalancer access for the given instance.
+    Enable load balancer (ELB) management for the given instance.
     """
     log('Enabling ELB for instance {} of application {} in region {}',
         instance_id, application_name, region)
@@ -165,9 +165,9 @@ def enable_elb(application_name, instance_id, region):
     _attach_policy(policy_arn, role_name)
 
 
-def enable_ebs(application_name, instance_id, region):
+def enable_block_storage_management(application_name, instance_id, region):
     """
-    Enable Elastic Block Storage access for the given instance.
+    Enable block storage (EBS) management for the given instance.
     """
     log('Enabling EBS for instance {} of application {} in region {}',
         instance_id, application_name, region)
@@ -176,23 +176,26 @@ def enable_ebs(application_name, instance_id, region):
     _attach_policy(policy_arn, role_name)
 
 
-def enable_route53(application_name, instance_id, region):
+def enable_dns_management(application_name, instance_id, region):
     """
-    Enable Route53 access for the given instance.
+    Enable DNS (Route53) management for the given instance.
     """
-    log('Enabling Route53 for instance {} of application {} in region {}',
+    log('Enabling DNS (Route53) management for instance {} of '
+        'application {} in region {}',
         instance_id, application_name, region)
     policy_arn = _get_policy_arn('route53')
     role_name = _get_role_name(application_name, instance_id, region)
     _attach_policy(policy_arn, role_name)
 
 
-def enable_s3_read(application_name, instance_id, region, patterns):
+def enable_object_storage_access(application_name, instance_id, region,
+                                 patterns):
     """
-    Enable S3 read-only access for the given instance to resources matching
-    the given patterns.
+    Enable object storage (S3) read-only access for the given instance to
+    resources matching the given patterns.
     """
-    log('Enabling S3 read for instance {} of application {} in region {}',
+    log('Enabling object storage (S3) read for instance {} of '
+        'application {} in region {}',
         instance_id, application_name, region)
     policy_name = 's3-read'
     if patterns:
@@ -206,10 +209,11 @@ def enable_s3_read(application_name, instance_id, region, patterns):
         _add_app_entity(application_name, 'policy', policy_arn)
 
 
-def enable_s3_write(application_name, instance_id, region, patterns):
+def enable_object_storage_management(application_name, instance_id, region,
+                                     patterns):
     """
-    Enable S3 full access for the given instance to resources matching
-    the given patterns.
+    Enable object storage (S3) management for the given instance to
+    resources matching the given patterns.
     """
     log('Enabling S3 write for instance {} of application {} in region {}',
         instance_id, application_name, region)

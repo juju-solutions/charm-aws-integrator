@@ -50,9 +50,9 @@ try:
         layer.aws._cleanup_policy(policy)
 
     hookenv.action_set({
-        'removed-roles': ', '.join(roles),
-        'removed-instance-profiles': ', '.join(instance_profiles),
-        'removed-policies': ', '.join([arn.split('/')[-1]
+        'removed.roles': ', '.join(roles),
+        'removed.instance-profiles': ', '.join(instance_profiles),
+        'removed.policies': ', '.join([arn.split('/')[-1]
                                        for arn in policies]),
     })
 except layer.aws.AWSError as e:
