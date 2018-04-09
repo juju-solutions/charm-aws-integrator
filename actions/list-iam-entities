@@ -2,8 +2,11 @@
 
 import os
 from charmhelpers.core import hookenv
-from charms.layer import aws as charm_lib
+from charms import layer
 from reactive import snap
+
+
+layer.import_layer_libs()
 
 
 def partition(predicate, items):
@@ -23,12 +26,12 @@ def is_global(entity):
 
 
 try:
-    # ennsure /snap/bin is on the path
+    # ensure /snap/bin is on the path
     snap.ensure_path()
 
-    roles = charm_lib._list_roles()
-    instance_profiles = charm_lib._list_instance_profiles()
-    policies = [arn.split('/')[-1] for arn in charm_lib._list_policies()]
+    roles = layer.aws._list_roles()
+    instance_profiles = layer.aws._list_instance_profiles()
+    policies = [arn.split('/')[-1] for arn in layer.aws._list_policies()]
 
     model_roles, other_roles = partition(current_model, roles)
     model_ips, other_ips = partition(current_model, instance_profiles)
@@ -44,5 +47,5 @@ try:
         'model-policies': ', '.join(model_policies),
         'other-policies': ', '.join(other_policies),
     })
-except charm_lib.AWSError as e:
+except layer.aws.AWSError as e:
     hookenv.action_fail(e.message)

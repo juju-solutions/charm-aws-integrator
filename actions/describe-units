@@ -1,0 +1,69 @@
+#!/usr/local/sbin/charm-env python3
+
+import os
+import re
+import sys
+from charmhelpers.core import hookenv
+from charms.reactive import Endpoint, endpoint_from_flag
+from charms import layer
+from reactive import snap
+
+
+layer.import_layer_libs()
+Endpoint._startup()
+
+
+try:
+    # ensure /snap/bin is on the path
+    snap.ensure_path()
+
+    clients = endpoint_from_flag('endpoint.aws.joined')
+    if not clients:
+        hookenv.action_fail('No clients connected')
+        sys.exit(0)
+    units = clients.unit_instances
+    instance_ids = [unit['instance-id'] for unit in units.values()]
+    region = list(units.values())[0]['region']  # TODO handle multiple regions
+    instances = layer.aws._aws('ec2', 'describe-instances',
+                               '--region', region,
+                               '--instance-ids', *instance_ids,
+                               '--query', 'Reservations[*].Instances[][]')
+    instances = {instance['InstanceId']: instance
+                 for instance in instances}
+    model_id = os.environ['JUJU_MODEL_UUID']
+    group_pattern = re.compile(r'^juju-{}-\d+$'.format(model_id))
+    results = {}
+
+    def _add_result(prefix, fields):
+        results.update({'{}.{}'.format(prefix, key): value
+                        for key, value in fields.items()})
+
+    for unit_name, instance in units.items():
+        instance_id = instance['instance-id']
+        if not instance_id:
+            _add_result(unit_name, {'instance-id': instance_id})
+            continue
+        instance = instances[instance_id]
+        instance_profile = instance['IamInstanceProfile']['Arn'].split('/')[1]
+        role = instance_profile  # these names are the same
+        security_group = [group['GroupName']
+                          for group in instance['SecurityGroups']
+                          if group_pattern.match(group['GroupName'])][0]
+        policies = layer.aws._aws('iam', 'list-attached-role-policies',
+                                  '--role-name', role,
+                                  '--query', 'AttachedPolicies[*].PolicyName')
+        result = {
+            'instance-id': instance_id,
+            'instance-profile-name': instance_profile,
+            'role-name': role,
+            'machine-security-group': security_group,
+        }
+        for i, policy in enumerate(policies):
+            result['policy.{}'.format(i)] = policy
+        for i, tag in enumerate(instance['Tags']):
+            result['tag.{}'.format(i)] = '{Key} = {Value}'.format(**tag)
+        _add_result(unit_name.replace('/', '-'), result)
+
+    hookenv.action_set(results)
+except layer.aws.AWSError as e:
+    hookenv.action_fail(e.message)

@@ -2,8 +2,11 @@
 
 import os
 from charmhelpers.core import hookenv
-from charms.layer import aws as charm_lib
+from charms import layer
 from reactive import snap
+
+
+layer.import_layer_libs()
 
 
 def is_global(entity):
@@ -18,13 +21,13 @@ try:
     model_uuid = os.environ['JUJU_MODEL_UUID']
 
     if purge_all:
-        charm_lib.log('Purging all IAM entities')
+        layer.aws.log('Purging all IAM entities')
     else:
-        charm_lib.log('Purging IAM entities from other models')
+        layer.aws.log('Purging IAM entities from other models')
 
-    roles = charm_lib._list_roles()
-    instance_profiles = charm_lib._list_instance_profiles()
-    policies = charm_lib._list_policies()
+    roles = layer.aws._list_roles()
+    instance_profiles = layer.aws._list_instance_profiles()
+    policies = layer.aws._list_policies()
 
     if not purge_all:
         roles = [role for role in roles if model_uuid not in role]
@@ -36,15 +39,15 @@ try:
                     model_uuid not in policy]
 
     if not any([roles, instance_profiles, policies]):
-        charm_lib.log('No IAM entities found to purge')
+        layer.aws.log('No IAM entities found to purge')
 
     # note: roles and IPs must be cleaned up before policies
     for role in roles:
-        charm_lib._cleanup_role(role)
+        layer.aws._cleanup_role(role)
     for instance_profile in instance_profiles:
-        charm_lib._cleanup_instance_profile(instance_profile)
+        layer.aws._cleanup_instance_profile(instance_profile)
     for policy in policies:
-        charm_lib._cleanup_policy(policy)
+        layer.aws._cleanup_policy(policy)
 
     hookenv.action_set({
         'removed-roles': ', '.join(roles),
@@ -52,5 +55,5 @@ try:
         'removed-policies': ', '.join([arn.split('/')[-1]
                                        for arn in policies]),
     })
-except charm_lib.AWSError as e:
+except layer.aws.AWSError as e:
     hookenv.action_fail(e.message)

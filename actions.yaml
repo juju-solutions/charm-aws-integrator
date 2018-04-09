@@ -1,3 +1,7 @@
+describe-units:
+  description: |
+    Provide info about the state of all related units, such as tags and
+    policies attached.
 list-iam-entities:
   description: |
     List IAM entities created by this charm, such as roles, instance-profiles,
