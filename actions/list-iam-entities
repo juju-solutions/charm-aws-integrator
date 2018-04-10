@@ -39,13 +39,13 @@ try:
     model_policies, other_policies = partition(current_model, model_policies)
 
     hookenv.action_set({
-        'model-roles': ', '.join(model_roles),
-        'other-roles': ', '.join(other_roles),
-        'model-instance-profiles': ', '.join(model_ips),
-        'other-instance-profiles': ', '.join(other_ips),
-        'global-policies': ', '.join(global_policies),
-        'model-policies': ', '.join(model_policies),
-        'other-policies': ', '.join(other_policies),
+        'model.roles': ', '.join(model_roles),
+        'other.roles': ', '.join(other_roles),
+        'model.instance-profiles': ', '.join(model_ips),
+        'other.instance-profiles': ', '.join(other_ips),
+        'global.policies': ', '.join(global_policies),
+        'model.policies': ', '.join(model_policies),
+        'other.policies': ', '.join(other_policies),
     })
 except layer.aws.AWSError as e:
     hookenv.action_fail(e.message)

@@ -35,10 +35,10 @@ def no_requests():
           'charm.aws.creds.set',
           'endpoint.aws.requested')
 def handle_requests():
-    layer.status.maintenance('granting integration requests')
     aws = endpoint_from_flag('endpoint.aws.requested')
     for request in aws.requests:
-        layer.aws.log('Granting request for {}'.format(request.unit_name))
+        layer.status.maintenance('granting request for {}'.format(
+            request.unit_name))
         if request.instance_tags:
             layer.aws.tag_instance(
                 request.instance_id,
@@ -64,29 +64,29 @@ def handle_requests():
                 request.application_name,
                 request.instance_id,
                 request.region)
-        if request.requested_elb:
-            layer.aws.enable_elb(
+        if request.requested_load_balancer_management:
+            layer.aws.enable_load_balancer_management(
                 request.application_name,
                 request.instance_id,
                 request.region)
-        if request.requested_ebs:
-            layer.aws.enable_ebs(
+        if request.requested_block_storage_management:
+            layer.aws.enable_block_storage_management(
                 request.application_name,
                 request.instance_id,
                 request.region)
-        if request.requested_route53:
-            layer.aws.enable_route53(
+        if request.requested_dns_management:
+            layer.aws.enable_dns_management(
                 request.application_name,
                 request.instance_id,
                 request.region)
-        if request.requested_s3_read:
-            layer.aws.enable_s3_read(
+        if request.requested_object_storage_access:
+            layer.aws.enable_object_storage_access(
                 request.application_name,
                 request.instance_id,
                 request.region,
                 request.s3_read_patterns)
-        if request.requested_s3_write:
-            layer.aws.enable_s3_write(
+        if request.requested_object_storage_management:
+            layer.aws.enable_object_storage_management(
                 request.application_name,
                 request.instance_id,
                 request.region,
