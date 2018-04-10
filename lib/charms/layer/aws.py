@@ -3,9 +3,10 @@ import os
 import re
 import sys
 import subprocess
+from base64 import b64decode
 from math import ceil, floor
 from time import sleep
-from configparser import ConfigParser
+from configparser import ConfigParser, MissingSectionHeaderError
 from pathlib import Path
 
 import yaml
@@ -36,30 +37,55 @@ def get_credentials():
 
     Prefers the config so that it can be overridden.
     """
+    no_creds_msg = 'missing credentials; set credentials config'
     config = hookenv.config()
+    # try to use Juju's trust feature
+    try:
+        result = subprocess.run(['credential-get'],
+                                check=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        creds = yaml.load(result.stdout.decode('utf8'))
+        access_key = creds['credential']['attributes']['access-key']
+        secret_key = creds['credential']['attributes']['secret-key']
+        update_credentials_file(access_key, secret_key)
+        return True
+    except FileNotFoundError:
+        pass  # juju trust not available
+    except subprocess.CalledProcessError as e:
+        if 'permission denied' not in e.stderr.decode('utf8'):
+            raise
+        no_creds_msg = 'missing credentials access; grant with: juju trust'
+
+    # try credentials config
+    if config['credentials']:
+        try:
+            creds_data = b64decode(config['credentials']).decode('utf8')
+            creds = ConfigParser()
+            try:
+                creds.read_string(creds_data)
+            except MissingSectionHeaderError:
+                creds.read_string('[default]\n' + creds_data)
+            for section in creds.sections():
+                access_key = creds[section].get('aws_access_key_id')
+                secret_key = creds[section].get('aws_secret_access_key')
+                if access_key and secret_key:
+                    update_credentials_file(access_key, secret_key)
+                    return True
+        except Exception:
+            status.blocked('invalid value for credentials config')
+            return False
+
+    # try access-key and secret-key config
     access_key = config['access-key']
     secret_key = config['secret-key']
-    if not (access_key and secret_key):
-        try:
-            result = subprocess.run(['credential-get'],
-                                    check=True,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            creds = yaml.load(result.stdout.decode('utf8'))
-            access_key = creds['credential']['attributes']['access-key']
-            secret_key = creds['credential']['attributes']['secret-key']
-        except subprocess.CalledProcessError as e:
-            if 'permission denied' not in e.stderr.decode('utf8'):
-                raise
-            status.blocked('missing credentials access; '
-                           'grant with: juju trust')
-            return False
-        except FileNotFoundError:
-            status.blocked('missing credentials; '
-                           'set access-key and secret-key config')
-            return False
-    update_credentials_file(access_key, secret_key)
-    return True
+    if access_key and secret_key:
+        update_credentials_file(access_key, secret_key)
+        return True
+
+    # no creds provided
+    status.blocked(no_creds_msg)
+    return False
 
 
 def update_credentials_file(access_key, secret_key):
