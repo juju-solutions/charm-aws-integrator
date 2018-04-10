@@ -10,7 +10,8 @@ from charms.reactive import (
 from charms import layer
 
 
-@when_any('config.changed.access-key',
+@when_any('config.changed.credentials',
+          'config.changed.access-key',
           'config.changed.secret-key')
 def update_creds():
     clear_flag('charm.aws.creds.set')
