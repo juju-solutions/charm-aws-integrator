@@ -330,7 +330,7 @@ class AlreadyExistsAWSError(AWSError):
     ]
 
 
-def _elide(s, max_len):
+def _elide(s, max_len, ellipsis='...'):
     """
     Elide s in the middle to ensure it is under max_len.
 
@@ -338,9 +338,9 @@ def _elide(s, max_len):
     characters were to show that they've been removed.
     """
     if len(s) > max_len:
-        hl = len(s - 3) / 2  # sub 3 for ellipsis
+        hl = (max_len - len(ellipsis)) / 2
         headl, taill = floor(hl), ceil(hl)
-        s = s[:headl] + '...' + s[-taill:]
+        s = s[:headl] + ellipsis + s[-taill:]
     return s
 
 
