@@ -15,9 +15,9 @@ for this, and can be deployed with the following bundle overlay:
 ```yaml
 applications:
   kubernetes-master:
-    charm: cs:~johnsca/kubernetes-master-0
+    charm: cs:~johnsca/kubernetes-master
   kubernetes-worker:
-    charm: cs:~johnsca/kubernetes-worker-0
+    charm: cs:~johnsca/kubernetes-worker
   aws:
     charm: cs:~johnsca/aws
     num_units: 1
