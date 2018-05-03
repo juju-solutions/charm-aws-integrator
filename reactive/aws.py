@@ -2,7 +2,7 @@ from charms.reactive import (
     when_all,
     when_any,
     when_not,
-    endpoint_from_flag,
+    endpoint_from_name,
     toggle_flag,
     clear_flag,
 )
@@ -27,7 +27,7 @@ def get_creds():
 @when_not('endpoint.aws.requested')
 def no_requests():
     layer.status.maintenance('cleaning up unused aws entities')
-    aws = endpoint_from_flag('endpoint.aws.requested')
+    aws = endpoint_from_name('aws')
     layer.aws.cleanup(aws.application_names)
     layer.status.active('ready')
 
@@ -36,7 +36,7 @@ def no_requests():
           'charm.aws.creds.set',
           'endpoint.aws.requested')
 def handle_requests():
-    aws = endpoint_from_flag('endpoint.aws.requested')
+    aws = endpoint_from_name('aws')
     for request in aws.requests:
         layer.status.maintenance('granting request for {}'.format(
             request.unit_name))
