@@ -85,13 +85,13 @@ def handle_requests():
                 request.application_name,
                 request.instance_id,
                 request.region,
-                request.s3_read_patterns)
+                request.object_storage_access_patterns)
         if request.requested_object_storage_management:
             layer.aws.enable_object_storage_management(
                 request.application_name,
                 request.instance_id,
                 request.region,
-                request.s3_write_patterns)
+                request.object_storage_management_patterns)
         layer.aws.log('Finished request for {}'.format(request.unit_name))
         request.mark_completed()
     clear_flag('endpoint.aws.requested')
