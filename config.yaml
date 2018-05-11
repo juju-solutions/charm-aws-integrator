@@ -10,6 +10,8 @@ options:
 
       It is strongly recommended that you use 'juju trust' instead, if available.
       This will take precedence over the 'access-key' / 'secret-key' config options.
+    type: string
+    default: ""
   access-key:
     description: |
       An IAM access key.

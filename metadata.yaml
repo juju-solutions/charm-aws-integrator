@@ -1,4 +1,5 @@
 name: aws
+display-name: AWS
 summary: |
   Proxy charm to enable AWS integrations via Juju relations.
 description: |
