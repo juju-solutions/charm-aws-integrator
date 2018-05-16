@@ -130,7 +130,7 @@ def tag_instance_security_group(instance_id, region, tags):
                              '[][]')
     groups = {group_name: group_id
               for group_id, group_name in groups
-              if re.match(r'^juju-.*-\d+$', group_name)}
+              if re.match(r'^juju-.{36}-\d+$', group_name)}
     if len(groups) != 1:
         log_err('Got unexpected number of security groups: {}', groups)
         sys.exit(1)
