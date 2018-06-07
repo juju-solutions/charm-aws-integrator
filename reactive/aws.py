@@ -24,7 +24,7 @@ def set_app_ver():
         stdout = result.stdout.decode('utf8').splitlines()
         version = [line.split()[1] for line in stdout if 'installed' in line]
         if version:
-            hookenv.application_version_set('1.0')
+            hookenv.application_version_set(version[0])
 
 
 @when_any('config.changed.credentials',
