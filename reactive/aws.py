@@ -4,10 +4,18 @@ from charms.reactive import (
     when_not,
     endpoint_from_name,
     toggle_flag,
+    set_flag,
     clear_flag,
 )
+from charmhelpers.core import hookenv
 
 from charms import layer
+
+
+@when_not('charm.aws.app-ver.set')
+def set_app_ver():
+    hookenv.application_version_set('1.0')
+    set_flag('charm.aws.app-ver.set')
 
 
 @when_any('config.changed.credentials',
