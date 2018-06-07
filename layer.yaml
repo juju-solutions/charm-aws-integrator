@@ -1,9 +1,9 @@
-repo: 'https://github.com/juju-solutions/layer-aws'
+repo: 'https://github.com/juju-solutions/charm-aws-integrator'
 includes:
   - 'layer:basic'
   - 'layer:status'
   - 'layer:snap'
-  - 'interface:aws'
+  - 'interface:aws-integration'
 options:
   basic:
     use_venv: true
