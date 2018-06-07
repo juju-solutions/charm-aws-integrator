@@ -14,19 +14,19 @@ following bundle overlay:
 
 ```yaml
 applications:
-  aws:
-    charm: cs:~containers/aws
+  aws-integrator:
+    charm: cs:~containers/aws-integrator
     num_units: 1
 relations:
-  - ['aws', 'kubernetes-master']
-  - ['aws', 'kubernetes-worker']
+  - ['aws-integrator', 'kubernetes-master']
+  - ['aws-integrator', 'kubernetes-worker']
 ```
 
 Using Juju 2.4-beta1 or later:
 
 ```
 juju deploy cs:canonical-kubernetes --overlay ./k8s-aws-overlay.yaml
-juju trust aws
+juju trust aws-integrator
 ```
 
 To deploy with earlier versions of Juju, you will need to provide the cloud
@@ -110,5 +110,5 @@ watch kubectl get svc -o wide --selector=run=load-balancer-example
 ```
 
 
-[interface]: https://github.com/juju-solutions/interface-aws
+[interface]: https://github.com/juju-solutions/interface-aws-integration
 [CDK]: https://jujucharms.com/canonical-kubernetes

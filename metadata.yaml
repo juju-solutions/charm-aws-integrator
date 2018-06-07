@@ -1,18 +1,19 @@
-name: aws
-display-name: AWS
+name: aws-integrator
+display-name: AWS-Integrator
 summary: |
-  Proxy charm to enable AWS integrations via Juju relations.
+  Charm to enable AWS integrations via Juju relations.
 description: |
   This charm can grant select permissions to instances of applications
   related to it which enable integration with AWS specific features,
   such as ELB, EBS, etc.
-maintainers: ['Cory Johns <johnsca@gmail.com>']
+maintainers: ['Cory Johns <cory.johns@canonical.com>']
 series:
   - xenial
+  - bionic
 tags: ['aws', 'native', 'integration']
 provides:
   aws:
-    interface: aws
+    interface: aws-integration
 resources:
   aws-cli:
     type: file
