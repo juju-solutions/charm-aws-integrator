@@ -33,6 +33,14 @@ To deploy with earlier versions of Juju, you will need to provide the cloud
 credentials via the `credentials`, or `access-key` and `secret-key`, charm
 config options.
 
+# Resource Usage Note
+
+It is important to keep in mind that relating to this charm gives other charms
+the ability to potentially allocate billable cloud resources that will **not**
+show up in the Juju model and thus will need to be manually tracked and audited
+via the cloud's interface.
+
+
 # Examples
 
 Following are some examples using AWS integration with CDK.
