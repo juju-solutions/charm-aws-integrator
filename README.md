@@ -40,8 +40,8 @@ as EBS volumes and ELBs, which could lead to cloud charges and count against
 quotas.  Because these resources are not managed by Juju, they will not be
 automatically deleted when the models or applications are destroyed, nor will
 they show up in Juju's status or GUI.  It is therefore up to the operator to
-manually track and audit these resources via the individual applications or
-via the cloud's interface.
+manually delete these resources when they are no longer needed, using the
+AWS console or API.
 
 
 # Examples
