@@ -35,12 +35,13 @@ config options.
 
 # Resource Usage Note
 
-It is important to keep in mind that relating to this charm gives other charms
-the ability to directly allocate resources, such as storage or load balancers,
-which could lead to cloud charges and count against quotas.  These resources
-are not modeled by Juju, and thus will not show up in Juju's status or GUI.  It
-is therefore up to the operator to manually track and audit these resources
-via the individual applications or via the cloud's interface.
+By relating to this charm, other charms can directly allocate resources, such
+as EBS volumes and ELBs, which could lead to cloud charges and count against
+quotas.  Because these resources are not managed by Juju, they will not be
+automatically deleted when the models or applications are destroyed, nor will
+they show up in Juju's status or GUI.  It is therefore up to the operator to
+manually track and audit these resources via the individual applications or
+via the cloud's interface.
 
 
 # Examples
