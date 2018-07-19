@@ -36,9 +36,11 @@ config options.
 # Resource Usage Note
 
 It is important to keep in mind that relating to this charm gives other charms
-the ability to potentially allocate billable cloud resources that will **not**
-show up in the Juju model and thus will need to be manually tracked and audited
-via the cloud's interface.
+the ability to directly allocate resources, such as storage or load balancers,
+which could lead to cloud charges and count against quotas.  These resources
+are not modeled by Juju, and thus will not show up in Juju's status or GUI.  It
+is therefore up to the operator to manually track and audit these resources
+via the individual applications or via the cloud's interface.
 
 
 # Examples
