@@ -7,7 +7,9 @@ the applications that are related to this charm.
 ## Usage
 
 When on AWS, this charm can be deployed, granted trust via Juju to access AWS,
-and then related to an application that supports the [interface][].
+and then related to an application that supports the [interface][].  The set
+of permissions that the related application could request is documented in the
+interface's [Requires API documentation][api-doc].
 
 For example, [CDK][] has support for this, and can be deployed with the
 following bundle overlay:
@@ -122,4 +124,5 @@ watch kubectl get svc -o wide --selector=run=load-balancer-example
 
 
 [interface]: https://github.com/juju-solutions/interface-aws-integration
+[api-doc]: https://github.com/juju-solutions/interface-aws-integration/blob/master/docs/requires.md
 [CDK]: https://jujucharms.com/canonical-kubernetes
