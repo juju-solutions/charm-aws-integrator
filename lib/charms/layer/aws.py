@@ -152,6 +152,10 @@ def tag_instance_subnet(instance_id, region, tags):
                      '--query', 'Reservations[*]'
                                 '.Instances[*]'
                                 '.SubnetId[] | [0]')
+    if subnet_id is None:
+        raise AWSError(None, ('Unable to determine subnet ID for {}; '
+                              'do the credentials have sufficient rights?'
+                              ''.format(instance_id)))
     _apply_tags(region, [subnet_id], tags)
 
 
