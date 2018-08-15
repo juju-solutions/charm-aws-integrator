@@ -24,16 +24,28 @@ relations:
   - ['aws-integrator', 'kubernetes-worker']
 ```
 
-Using Juju 2.4-beta1 or later:
+Then deploy CDK using this overlay:
 
 ```
 juju deploy cs:canonical-kubernetes --overlay ./k8s-aws-overlay.yaml
+```
+
+The charm then needs to be granted access to credentials that it can use to
+setup integrations.  Using Juju 2.4 or later, you can easily grant access to
+the credentials used deploy the integrator itself:
+
+```
 juju trust aws-integrator
 ```
 
-To deploy with earlier versions of Juju, you will need to provide the cloud
-credentials via the `credentials`, or `access-key` and `secret-key`, charm
-config options.
+To deploy with earlier versions of Juju, or if you wish to provide it different
+credentials, you will need to provide the cloud credentials via the `credentials`,
+charm config options.
+
+**Note:** The credentials used must have rights to access the IAM API to inspect
+the instances connecting to it, assign policies to those instances, and create
+custom roles and policies.  This may be different from the access permissions
+that Juju itself requires.
 
 # Resource Usage Note
 
