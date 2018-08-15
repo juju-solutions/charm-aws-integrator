@@ -42,10 +42,10 @@ To deploy with earlier versions of Juju, or if you wish to provide it different
 credentials, you will need to provide the cloud credentials via the `credentials`,
 charm config options.
 
-**Note:** The credentials used must have rights to access the IAM API to inspect
-the instances connecting to it, assign policies to those instances, and create
-custom roles and policies.  This may be different from the access permissions
-that Juju itself requires.
+**Note:** The credentials used must have rights to [access the IAM
+API][iam-api] to inspect the instances connecting to it, assign policies to
+those instances, and create custom roles and policies.  This may be different
+from the access permissions that Juju itself requires.
 
 # Resource Usage Note
 
@@ -138,3 +138,4 @@ watch kubectl get svc -o wide --selector=run=load-balancer-example
 [interface]: https://github.com/juju-solutions/interface-aws-integration
 [api-doc]: https://github.com/juju-solutions/interface-aws-integration/blob/master/docs/requires.md
 [CDK]: https://jujucharms.com/canonical-kubernetes
+[iam-api]: https://console.aws.amazon.com/iam/
