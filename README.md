@@ -42,10 +42,39 @@ To deploy with earlier versions of Juju, or if you wish to provide it different
 credentials, you will need to provide the cloud credentials via the `credentials`,
 charm config options.
 
-**Note:** The credentials used must have rights to access the IAM API to inspect
-the instances connecting to it, assign policies to those instances, and create
-custom roles and policies.  This may be different from the access permissions
-that Juju itself requires.
+# Permissions Requirements
+
+The credentials given to the charm must include the following access rights:
+
+| EC2                           |
+| ----------------------------- |
+| AssociateIamInstanceProfile   |
+| CreateTags                    |
+| DescribeInstances             |
+
+| IAM                           |
+| ----------------------------- |
+| AddRoleToInstanceProfile      |
+| AttachRolePolicy              |
+| CreateInstanceProfile         |
+| CreatePolicy                  |
+| CreateRole                    |
+| DeleteInstanceProfile         |
+| DeletePolicy                  |
+| DeleteRole                    |
+| DetachRolePolicy              |
+| ListAttachedRolePolicies      |
+| ListInstanceProfiles          |
+| ListPolicies                  |
+| ListRoles                     |
+| RemoveRoleFromInstanceProfile |
+
+| STS                           |
+| ----------------------------- |
+| GetCallerIdentity             |
+
+Note that these may be different from the permissions that Juju requires to operator.
+ 
 
 # Resource Usage Note
 
