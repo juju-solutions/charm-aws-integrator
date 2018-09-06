@@ -73,7 +73,7 @@ The credentials given to the charm must include the following access rights:
 | ----------------------------- |
 | GetCallerIdentity             |
 
-Note that these may be different from the permissions that Juju requires to operator.
+Note that these may be different from the permissions that Juju requires to operate.
  
 
 # Resource Usage Note
