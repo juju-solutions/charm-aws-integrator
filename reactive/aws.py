@@ -74,6 +74,16 @@ def handle_requests():
                     request.instance_id,
                     request.region,
                     request.instance_subnet_tags)
+            if request.requested_acm_readonly:
+                layer.aws.enable_acm_readonly(
+                    request.application_name,
+                    request.instance_id,
+                    request.region)
+            if request.requested_acm_fullaccess:
+                layer.aws.enable_acm_fullaccess(
+                    request.application_name,
+                    request.instance_id,
+                    request.region)
             if request.requested_instance_inspection:
                 layer.aws.enable_instance_inspection(
                     request.application_name,
