@@ -159,6 +159,30 @@ def tag_instance_subnet(instance_id, region, tags):
     _apply_tags(region, [subnet_id], tags)
 
 
+def enable_acm_readonly(application_name, instance_id, region):
+    """
+    Enable readonly access to ACM for the given instance.
+    """
+    log('Enabling readonly access to ACM for instance {} '
+        'of application {} in region {}',
+        instance_id, application_name, region)
+    policy_arn = _get_policy_arn('acm-readonly')
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
+
+
+def enable_acm_fullaccess(application_name, instance_id, region):
+    """
+    Enable fullaccess to ACM for the given instance.
+    """
+    log('Enabling fullaccess to ACM for instance {} '
+        'of application {} in region {}',
+        instance_id, application_name, region)
+    policy_arn = _get_policy_arn('acm-fullaccess')
+    role_name = _get_role_name(application_name, instance_id, region)
+    _attach_policy(policy_arn, role_name)
+
+
 def enable_instance_inspection(application_name, instance_id, region):
     """
     Enable instance inspection access for the given instance.
