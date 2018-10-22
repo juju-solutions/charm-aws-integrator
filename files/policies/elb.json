@@ -9,7 +9,16 @@
     {
       "Effect": "Allow",
       "Action": [ "iam:CreateServiceLinkedRole" ],
-      "Resource": [ "arn:aws:iam::*:role/aws-service-role/elasticloadbalancing.amazonaws.com/*" ]
+      "Resource": [ "arn:aws:iam::*:role/aws-service-role/elasticloadbalancing.amazonaws.com/*" ],
+      "Condition": {"StringLike": {"iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"}}
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:PutRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::*:role/aws-service-role/elasticloadbalancing.amazonaws.com/*"
     }
   ]
 }
