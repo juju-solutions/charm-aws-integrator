@@ -5,6 +5,11 @@
       "Effect": "Allow",
       "Action": [ "elasticloadbalancing:*" ],
       "Resource": [ "*" ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [ "iam:CreateServiceLinkedRole" ],
+      "Resource": [ "arn:aws:iam::*:role/aws-service-role/elasticloadbalancing.amazonaws.com/*" ]
     }
   ]
 }
