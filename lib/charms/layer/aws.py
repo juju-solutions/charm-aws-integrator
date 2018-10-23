@@ -283,6 +283,26 @@ def enable_object_storage_management(application_name, instance_id, region,
         _add_app_entity(application_name, 'policy', policy_arn)
 
 
+def update_policies():
+    """
+    Check for new policy definitions and update as necessary.
+    """
+    new, updated, up_to_date = 0, 0, 0
+    new_policies = {f.stem for f in Path('files/policies').glob('*.json')}
+    for policy_arn in _list_policies():
+        policy_name = _get_policy_name(policy_arn)
+        new_policies.remove(policy_name)
+        if _is_policy_updated(policy_arn):
+            _add_new_policy_version(policy_arn)
+            updated += 1
+        else:
+            up_to_date += 1
+    for policy_name in new_policies:
+        _ensure_policy(policy_name)
+        new += 1
+    return new, updated, up_to_date
+
+
 def cleanup(current_applications):
     """
     Cleanup unused IAM entities from the current model that are being managed
@@ -527,19 +547,36 @@ def _get_account_id():
 
 def _get_policy_arn(policy_name):
     """
-    Translate a short policy name into an ARN and ensure that it is loaded.
+    Translate a short or full policy name into an ARN.
     """
-    policy_name = 'charm.aws.{}'.format(policy_name)
+    if not policy_name.startswith('charm.aws.'):
+        policy_name = 'charm.aws.{}'.format(policy_name)
     account_id = _get_account_id()
     _ensure_policy(policy_name)
     return 'arn:aws:iam::{}:policy/{}'.format(account_id, policy_name)
+
+
+def _get_policy_name(policy_arn):
+    """
+    Translate a policy ARN into a short name.
+    """
+    return policy_arn.split(':')[-1].split('/')[-1].split('.')[-1]
+
+
+def _get_policy_file(policy_name):
+    """
+    Translate a short or full policy name into a Path instance.
+    """
+    if policy_name.startswith(ENTITY_PREFIX):
+        policy_name = policy_name[len(ENTITY_PREFIX):]
+    return Path('files/policies/{}.json'.format(policy_name))
 
 
 def _ensure_policy(policy_name):
     """
     Ensure that the given policy is loaded into AWS.
     """
-    policy_file = Path('files/policies/{}.json'.format(policy_name[10:]))
+    policy_file = _get_policy_file(policy_name)
     policy_file_url = 'file://{}'.format(policy_file.absolute())
     try:
         _aws('iam', 'create-policy',
@@ -548,6 +585,52 @@ def _ensure_policy(policy_name):
         log('Loaded IAM policy: {}', policy_name)
     except AlreadyExistsAWSError:
         pass
+
+
+def _is_policy_updated(policy_arn):
+    """
+    Check whether the given policy has a newer version locally.
+    """
+    policy_name = _get_policy_name(policy_arn)
+    policy_file = _get_policy_file(policy_name)
+    if not policy_file.exists():
+        # policy no longer supported, but we shouldn't remove it
+        return False
+    new_policy_doc = json.loads(policy_file.read_text())
+    policy_versions = _aws('iam', 'list-policy-versions',
+                           '--policy-arn', policy_arn)
+    cur_policy_ver = [v['VersionId']
+                      for v in policy_versions['Versions']
+                      if v['IsDefaultVersion']][0]
+    cur_policy_doc = _aws('iam', 'get-policy-version',
+                          '--policy-arn', policy_arn,
+                          '--version-id', cur_policy_ver)
+    return cur_policy_doc != new_policy_doc
+
+
+def _add_new_policy_version(policy_arn):
+    """
+    Add a new version of the given policy and make it default.
+
+    This will clean up older policy versions if the limit of 5 versions is
+    reached.
+    """
+    policy_name = _get_policy_name(policy_arn)
+    policy_file = _get_policy_file(policy_name)
+    policy_file_url = 'file://{}'.format(policy_file.absolute())
+    policy_versions = _aws('iam', 'list-policy-versions',
+                           '--policy-arn', policy_arn)
+    if len(policy_versions['Versions']) == 5:
+        oldest_policy_version = [v['VersionId']
+                                 for v in reversed(policy_versions['Versions'])
+                                 if not v['IsDefaultVersion']][0]
+        _aws('iam', 'delete-policy-version',
+             '--policy-arn', policy_arn,
+             '--version-id', oldest_policy_version)
+    _aws('iam', 'create-policy-version',
+         '--policy-arn', policy_arn,
+         '--policy-document', policy_file_url,
+         '--set-as-default')
 
 
 def _get_role_name(application_name, instance_id, region):

@@ -8,6 +8,7 @@ from charms.reactive import (
     endpoint_from_name,
     toggle_flag,
     clear_flag,
+    hook,
 )
 from charmhelpers.core import hookenv
 
@@ -128,3 +129,8 @@ def handle_requests():
         hookenv.log(format_exc(), hookenv.ERROR)
         layer.status.blocked('error while granting requests; '
                              'check credentials and debug-log')
+
+
+@hook('upgrade-charm')
+def upgrade_charm():
+    layer.aws.update_policies()
