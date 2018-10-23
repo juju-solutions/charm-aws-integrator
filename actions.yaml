@@ -27,3 +27,7 @@ purge-iam-entities:
         current model!
       type: boolean
       default: false
+update-policies:
+  description: |
+    Check for new policy definitions and update as needed.  Note: This is done
+    automatically on charm upgrade.

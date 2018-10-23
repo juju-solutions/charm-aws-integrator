@@ -68,6 +68,12 @@ The credentials given to the charm must include the following access rights:
 | ListPolicies                  |
 | ListRoles                     |
 | RemoveRoleFromInstanceProfile |
+| CreatePolicyVersion           |
+| ListPolicyVersions            |
+| GetPolicyVersion              |
+| DeletePolicyVersion           |
+| SetDefaultPolicyVersion       |
+| GetPolicy                     |
 
 | STS                           |
 | ----------------------------- |

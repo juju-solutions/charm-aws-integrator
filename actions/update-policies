@@ -1,0 +1,24 @@
+#!/usr/local/sbin/charm-env python3
+
+import os
+from charmhelpers.core import hookenv
+from charms import layer
+from reactive import snap
+
+
+layer.import_layer_libs()
+
+
+try:
+    # ensure /snap/bin is on the path
+    snap.ensure_path()
+
+    new, updated, up_to_date = layer.aws.update_policies()
+
+    hookenv.action_set({
+        'new': new,
+        'updated': updated,
+        'up-to-date': up_to_date,
+    })
+except layer.aws.AWSError as e:
+    hookenv.action_fail(e.message)
