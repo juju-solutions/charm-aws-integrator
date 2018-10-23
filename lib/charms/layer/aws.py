@@ -294,7 +294,7 @@ def update_policies():
         new_policies.remove(policy_name)
         if _is_policy_updated(policy_arn):
             _add_new_policy_version(policy_arn)
-            update += 1
+            updated += 1
         else:
             up_to_date += 1
     for policy_name in new_policies:
