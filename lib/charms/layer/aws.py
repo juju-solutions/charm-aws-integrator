@@ -560,7 +560,7 @@ def _get_policy_name(policy_arn):
     """
     Translate a policy ARN into a short name.
     """
-    return policy_arn.split(':')[-1].split('/')[-1][len(ENTITY_PREFIX):]
+    return policy_arn.split(':')[-1].split('/')[-1].split('.')[-1]
 
 
 def _get_policy_file(policy_name):
