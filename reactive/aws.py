@@ -133,4 +133,9 @@ def handle_requests():
 
 @hook('upgrade-charm')
 def upgrade_charm():
-    layer.aws.update_policies()
+    try:
+        layer.aws.update_policies()
+    except layer.aws.AWSError:
+        hookenv.log(format_exc(), hookenv.ERROR)
+        layer.status.blocked('error while updating policies; '
+                             'check credentials and debug-log')
