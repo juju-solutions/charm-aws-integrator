@@ -268,9 +268,9 @@ def enable_object_storage_access(application_name, instance_id, region,
         instance_id, application_name, region)
     policy_name = 's3-read'
     if patterns:
-        policy_name = _restrict_policy_for_app(policy_name,
-                                               application_name,
-                                               patterns)
+        policy_name = _generate_app_specific_policy(policy_name,
+                                                    application_name,
+                                                    patterns)
     policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
     _ensure_policy(policy_name)
@@ -289,9 +289,9 @@ def enable_object_storage_management(application_name, instance_id, region,
         instance_id, application_name, region)
     policy_name = 's3-write'
     if patterns:
-        policy_name = _restrict_policy_for_app(policy_name,
-                                               application_name,
-                                               patterns)
+        policy_name = _generate_app_specific_policy(policy_name,
+                                                    application_name,
+                                                    patterns)
     policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
     _ensure_policy(policy_name)
@@ -313,7 +313,7 @@ def update_policies():
     def _update_policy(policy_name, policy_arn):
         # check for and update (if needed) a specific policy
         try:
-            if _policy_needs_update(policy_arn):
+            if _aws_policy_needs_update(policy_arn):
                 _add_new_policy_version(policy_arn)
                 stats['updated'] += 1
                 log('Updated policy {}', policy_name)
@@ -327,7 +327,7 @@ def update_policies():
     # loop over all policies we currently support (files on disk)
     policies = {f.stem for f in Path('files/policies').glob('*.json')}
     for policy_name in policies:
-        if _is_restricted_policy(policy_name):
+        if _is_app_specific_policy(policy_name):
             # this policy file's contents are not generic; it has data which
             # depends on relation data, which will be handled below
             continue
@@ -340,7 +340,7 @@ def update_policies():
             request.object_storage_access_patterns):
             # regenerate the app-specific policy .json file, so that we can
             # use that data to compare against the actual policy in AWS
-            policy_name = _restrict_policy_for_app(
+            policy_name = _generate_app_specific_policy(
                 's3-read',
                 request.application_name,
                 request.object_storage_access_patterns)
@@ -350,7 +350,7 @@ def update_policies():
             request.object_storage_management_patterns):
             # regenerate the app-specific policy .json file, so that we can
             # use that data to compare against the actual policy in AWS
-            policy_name = _restrict_policy_for_app(
+            policy_name = _generate_app_specific_policy(
                 's3-write',
                 request.application_name,
                 request.object_storage_management_patterns)
@@ -644,7 +644,7 @@ def _ensure_policy(policy_name):
         log('Policy already exists: {} ({})', policy_name, policy_file)
 
 
-def _policy_needs_update(policy_arn):
+def _aws_policy_needs_update(policy_arn):
     """
     Check whether the given policy has a newer version locally.
     """
@@ -756,7 +756,7 @@ def _ensure_role_attached(role_name, instance_id, region):
     _retry_for_entity_delay(_associate_iam_instance_profile)
 
 
-def _is_restricted_policy(policy_name):
+def _is_app_specific_policy(policy_name):
     """
     Determine if the given policy is a application-specific policy.
     """
@@ -765,7 +765,7 @@ def _is_restricted_policy(policy_name):
     return '.' in policy_name
 
 
-def _restrict_policy_for_app(policy_name, application_name, patterns):
+def _generate_app_specific_policy(policy_name, application_name, patterns):
     """
     Modify one of the general policies with application-specific resource
     patterns and return the new policy name.
@@ -845,7 +845,7 @@ def _cleanup_policy(policy_arn):
         _aws('iam', 'delete-policy',
              '--policy-arn', policy_arn)
         policy_name = _get_policy_name(policy_arn)
-        if _is_restricted_policy(policy_name):
+        if _is_app_specific_policy(policy_name):
             policy_file = _get_policy_file(policy_name)
             if policy_file.exists():
                 policy_file.unlink()
