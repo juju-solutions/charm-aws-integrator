@@ -311,6 +311,7 @@ def update_policies():
     }
 
     def _update_policy(policy_name, policy_arn):
+        # check for and update (if needed) a specific policy
         try:
             if _policy_needs_update(policy_arn):
                 _add_new_policy_version(policy_arn)
@@ -323,16 +324,22 @@ def update_policies():
             _ensure_policy(policy_name)
             stats['new'] += 1
 
+    # loop over all policies we currently support (files on disk)
     policies = {f.stem for f in Path('files/policies').glob('*.json')}
     for policy_name in policies:
         if _is_restricted_policy(policy_name):
+            # this policy file's contents are not generic; it has data which
+            # depends on relation data, which will be handled below
             continue
         policy_arn = _get_policy_arn(policy_name)
         _update_policy(policy_name, policy_arn)
+    # loop over all relation data looking for parameterized policies
     aws = endpoint_from_name('aws')
     for request in aws.all_requests:
         if (request.requested_object_storage_access and
             request.object_storage_access_patterns):
+            # regenerate the app-specific policy .json file, so that we can
+            # use that data to compare against the actual policy in AWS
             policy_name = _restrict_policy_for_app(
                 's3-read',
                 request.application_name,
@@ -341,6 +348,8 @@ def update_policies():
             _update_policy(policy_name, policy_arn)
         if (request.requested_object_storage_management and
             request.object_storage_management_patterns):
+            # regenerate the app-specific policy .json file, so that we can
+            # use that data to compare against the actual policy in AWS
             policy_name = _restrict_policy_for_app(
                 's3-write',
                 request.application_name,
