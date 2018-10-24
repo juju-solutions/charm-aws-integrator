@@ -13,12 +13,11 @@ try:
     # ensure /snap/bin is on the path
     snap.ensure_path()
 
-    new, updated, up_to_date = layer.aws.update_policies()
+    # ensure that reactive framework is setup for endpoints
+    hookenv._run_atstart()
 
-    hookenv.action_set({
-        'new': new,
-        'updated': updated,
-        'up-to-date': up_to_date,
-    })
+    stats = layer.aws.update_policies()
+
+    hookenv.action_set(stats)
 except layer.aws.AWSError as e:
     hookenv.action_fail(e.message)
