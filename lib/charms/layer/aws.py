@@ -13,6 +13,7 @@ import yaml
 
 from charmhelpers.core import hookenv
 from charmhelpers.core.unitdata import kv
+from charms.reactive import endpoint_from_name
 
 from charms.layer import status
 
@@ -166,8 +167,10 @@ def enable_acm_readonly(application_name, instance_id, region):
     log('Enabling readonly access to ACM for instance {} '
         'of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('acm-readonly')
+    policy_name = 'acm-readonly'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -178,8 +181,10 @@ def enable_acm_fullaccess(application_name, instance_id, region):
     log('Enabling fullaccess to ACM for instance {} '
         'of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('acm-fullaccess')
+    policy_name = 'acm-fullaccess'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -190,8 +195,10 @@ def enable_instance_inspection(application_name, instance_id, region):
     log('Enabling instance inspection for instance {} '
         'of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('instance-inspection')
+    policy_name = 'instance-inspection'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -203,8 +210,10 @@ def enable_network_management(application_name, instance_id, region):
     log('Enabling network management for instance {} '
         'of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('network-management')
+    policy_name = 'network-management'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -214,8 +223,10 @@ def enable_load_balancer_management(application_name, instance_id, region):
     """
     log('Enabling ELB for instance {} of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('elb')
+    policy_name = 'elb'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -225,8 +236,10 @@ def enable_block_storage_management(application_name, instance_id, region):
     """
     log('Enabling EBS for instance {} of application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('ebs')
+    policy_name = 'ebs'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -237,8 +250,10 @@ def enable_dns_management(application_name, instance_id, region):
     log('Enabling DNS (Route53) management for instance {} of '
         'application {} in region {}',
         instance_id, application_name, region)
-    policy_arn = _get_policy_arn('route53')
+    policy_name = 'route53'
+    policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
 
 
@@ -258,6 +273,7 @@ def enable_object_storage_access(application_name, instance_id, region,
                                                patterns)
     policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
     if patterns:
         _add_app_entity(application_name, 'policy', policy_arn)
@@ -278,6 +294,7 @@ def enable_object_storage_management(application_name, instance_id, region,
                                                patterns)
     policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
+    _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
     if patterns:
         _add_app_entity(application_name, 'policy', policy_arn)
@@ -287,20 +304,59 @@ def update_policies():
     """
     Check for new policy definitions and update as necessary.
     """
-    new, updated, up_to_date = 0, 0, 0
-    new_policies = {f.stem for f in Path('files/policies').glob('*.json')}
-    for policy_arn in _list_policies():
-        policy_name = _get_policy_name(policy_arn)
-        new_policies.remove(policy_name)
-        if _is_policy_updated(policy_arn):
-            _add_new_policy_version(policy_arn)
-            updated += 1
-        else:
-            up_to_date += 1
-    for policy_name in new_policies:
-        _ensure_policy(policy_name)
-        new += 1
-    return new, updated, up_to_date
+    stats = {
+        'new': 0,
+        'updated': 0,
+        'up-to-date': 0,
+    }
+
+    def _update_policy(policy_name, policy_arn):
+        # check for and update (if needed) a specific policy
+        try:
+            if _policy_needs_update(policy_arn):
+                _add_new_policy_version(policy_arn)
+                stats['updated'] += 1
+                log('Updated policy {}', policy_name)
+            else:
+                stats['up-to-date'] += 1
+                log('Policy {} up to date', policy_name)
+        except DoesNotExistAWSError:
+            _ensure_policy(policy_name)
+            stats['new'] += 1
+
+    # loop over all policies we currently support (files on disk)
+    policies = {f.stem for f in Path('files/policies').glob('*.json')}
+    for policy_name in policies:
+        if _is_restricted_policy(policy_name):
+            # this policy file's contents are not generic; it has data which
+            # depends on relation data, which will be handled below
+            continue
+        policy_arn = _get_policy_arn(policy_name)
+        _update_policy(policy_name, policy_arn)
+    # loop over all relation data looking for parameterized policies
+    aws = endpoint_from_name('aws')
+    for request in aws.all_requests:
+        if (request.requested_object_storage_access and
+            request.object_storage_access_patterns):
+            # regenerate the app-specific policy .json file, so that we can
+            # use that data to compare against the actual policy in AWS
+            policy_name = _restrict_policy_for_app(
+                's3-read',
+                request.application_name,
+                request.object_storage_access_patterns)
+            policy_arn = _get_policy_arn(policy_name)
+            _update_policy(policy_name, policy_arn)
+        if (request.requested_object_storage_management and
+            request.object_storage_management_patterns):
+            # regenerate the app-specific policy .json file, so that we can
+            # use that data to compare against the actual policy in AWS
+            policy_name = _restrict_policy_for_app(
+                's3-write',
+                request.application_name,
+                request.object_storage_management_patterns)
+            policy_arn = _get_policy_arn(policy_name)
+            _update_policy(policy_name, policy_arn)
+    return stats
 
 
 def cleanup(current_applications):
@@ -549,18 +605,17 @@ def _get_policy_arn(policy_name):
     """
     Translate a short or full policy name into an ARN.
     """
-    if not policy_name.startswith('charm.aws.'):
-        policy_name = 'charm.aws.{}'.format(policy_name)
+    if not policy_name.startswith(ENTITY_PREFIX):
+        policy_name = '{}.{}'.format(ENTITY_PREFIX, policy_name)
     account_id = _get_account_id()
-    _ensure_policy(policy_name)
     return 'arn:aws:iam::{}:policy/{}'.format(account_id, policy_name)
 
 
 def _get_policy_name(policy_arn):
     """
-    Translate a policy ARN into a short name.
+    Translate a policy ARN into a full name.
     """
-    return policy_arn.split(':')[-1].split('/')[-1].split('.')[-1]
+    return policy_arn.split(':')[-1].split('/')[-1]
 
 
 def _get_policy_file(policy_name):
@@ -568,7 +623,7 @@ def _get_policy_file(policy_name):
     Translate a short or full policy name into a Path instance.
     """
     if policy_name.startswith(ENTITY_PREFIX):
-        policy_name = policy_name[len(ENTITY_PREFIX):]
+        policy_name = policy_name[len(ENTITY_PREFIX)+1:]
     return Path('files/policies/{}.json'.format(policy_name))
 
 
@@ -576,6 +631,8 @@ def _ensure_policy(policy_name):
     """
     Ensure that the given policy is loaded into AWS.
     """
+    if not policy_name.startswith(ENTITY_PREFIX):
+        policy_name = '{}.{}'.format(ENTITY_PREFIX, policy_name)
     policy_file = _get_policy_file(policy_name)
     policy_file_url = 'file://{}'.format(policy_file.absolute())
     try:
@@ -584,10 +641,10 @@ def _ensure_policy(policy_name):
              '--policy-document', policy_file_url)
         log('Loaded IAM policy: {}', policy_name)
     except AlreadyExistsAWSError:
-        pass
+        log('Policy already exists: {} ({})', policy_name, policy_file)
 
 
-def _is_policy_updated(policy_arn):
+def _policy_needs_update(policy_arn):
     """
     Check whether the given policy has a newer version locally.
     """
@@ -596,7 +653,7 @@ def _is_policy_updated(policy_arn):
     if not policy_file.exists():
         # policy no longer supported, but we shouldn't remove it
         return False
-    new_policy_doc = json.loads(policy_file.read_text())
+    new_policy_doc = json.loads(policy_file.read_text())['Statement']
     policy_versions = _aws('iam', 'list-policy-versions',
                            '--policy-arn', policy_arn)
     cur_policy_ver = [v['VersionId']
@@ -605,6 +662,7 @@ def _is_policy_updated(policy_arn):
     cur_policy_doc = _aws('iam', 'get-policy-version',
                           '--policy-arn', policy_arn,
                           '--version-id', cur_policy_ver)
+    cur_policy_doc = cur_policy_doc['PolicyVersion']['Document']['Statement']
     return cur_policy_doc != new_policy_doc
 
 
@@ -698,6 +756,15 @@ def _ensure_role_attached(role_name, instance_id, region):
     _retry_for_entity_delay(_associate_iam_instance_profile)
 
 
+def _is_restricted_policy(policy_name):
+    """
+    Determine if the given policy is a application-specific policy.
+    """
+    if policy_name.startswith(ENTITY_PREFIX):
+        policy_name = policy_name[len(ENTITY_PREFIX)+1:]
+    return '.' in policy_name
+
+
 def _restrict_policy_for_app(policy_name, application_name, patterns):
     """
     Modify one of the general policies with application-specific resource
@@ -766,8 +833,22 @@ def _cleanup_policy(policy_arn):
     Cleanup an IAM policy.
     """
     try:
+        versions = _aws('iam', 'list-policy-versions',
+                        '--policy-arn', policy_arn)
+        for version in versions['Versions']:
+            if not version['IsDefaultVersion']:
+                _aws('iam', 'delete-policy-version',
+                     '--policy-arn', policy_arn,
+                     '--version-id', version['VersionId'])
+            log('Deleted IAM policy {} version {}',
+                policy_arn, version['VersionId'])
         _aws('iam', 'delete-policy',
              '--policy-arn', policy_arn)
+        policy_name = _get_policy_name(policy_arn)
+        if _is_restricted_policy(policy_name):
+            policy_file = _get_policy_file(policy_name)
+            if policy_file.exists():
+                policy_file.unlink()
         log('Deleted IAM policy {}', policy_arn)
     except DoesNotExistAWSError:
         pass
