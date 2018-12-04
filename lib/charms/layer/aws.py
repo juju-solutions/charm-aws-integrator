@@ -144,6 +144,9 @@ def tag_instance_security_group(instance_id, region, tags):
 def tag_instance_subnet(instance_id, region, tags):
     """
     Tag the subnet for the given instance with the given tags.
+
+    Note: EC2-Classic instances don't use VPC and thus don't have subnets.
+    For those instances, this is a no-op.
     """
     log('Tagging subnet for instance {} in {} with: {}',
         instance_id, region, tags)
@@ -153,11 +156,11 @@ def tag_instance_subnet(instance_id, region, tags):
                      '--query', 'Reservations[*]'
                                 '.Instances[*]'
                                 '.SubnetId[] | [0]')
-    if subnet_id is None:
-        raise AWSError(None, ('Unable to determine subnet ID for {}; '
-                              'do the credentials have sufficient rights?'
-                              ''.format(instance_id)))
-    _apply_tags(region, [subnet_id], tags)
+    if subnet_id is not None:
+        _apply_tags(region, [subnet_id], tags)
+    else:
+        log('Unable to determine subnet ID for {}; possibly EC2-Classic',
+            instance_id)
 
 
 def enable_acm_readonly(application_name, instance_id, region):
@@ -336,8 +339,8 @@ def update_policies():
     # loop over all relation data looking for parameterized policies
     aws = endpoint_from_name('aws')
     for request in aws.all_requests:
-        if (request.requested_object_storage_access and
-            request.object_storage_access_patterns):
+        if request.requested_object_storage_access and \
+           request.object_storage_access_patterns:
             # regenerate the app-specific policy .json file, so that we can
             # use that data to compare against the actual policy in AWS
             policy_name = _restrict_policy_for_app(
@@ -346,8 +349,8 @@ def update_policies():
                 request.object_storage_access_patterns)
             policy_arn = _get_policy_arn(policy_name)
             _update_policy(policy_name, policy_arn)
-        if (request.requested_object_storage_management and
-            request.object_storage_management_patterns):
+        if request.requested_object_storage_management and \
+           request.object_storage_management_patterns:
             # regenerate the app-specific policy .json file, so that we can
             # use that data to compare against the actual policy in AWS
             policy_name = _restrict_policy_for_app(
