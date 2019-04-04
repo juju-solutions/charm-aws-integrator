@@ -45,10 +45,10 @@ def get_creds():
           'charm.aws.creds.set')
 @when_not('endpoint.aws.requested')
 def no_requests():
-    layer.status.maintenance('cleaning up unused aws entities')
+    layer.status.maintenance('Cleaning up unused AWS entities.')
     aws = endpoint_from_name('aws')
     layer.aws.cleanup(aws.application_names)
-    layer.status.active('ready')
+    layer.status.active('Ready.')
 
 
 @when_all('snap.installed.aws-cli',
@@ -58,7 +58,7 @@ def handle_requests():
     aws = endpoint_from_name('aws')
     try:
         for request in aws.requests:
-            layer.status.maintenance('granting request for {}'.format(
+            layer.status.maintenance('Granting request for {}.'.format(
                 request.unit_name))
             if request.instance_tags:
                 layer.aws.tag_instance(
@@ -127,8 +127,8 @@ def handle_requests():
         clear_flag('endpoint.aws.requested')
     except layer.aws.AWSError:
         hookenv.log(format_exc(), hookenv.ERROR)
-        layer.status.blocked('error while granting requests; '
-                             'check credentials and debug-log')
+        layer.status.blocked('Error while granting requests; '
+                             'check credentials and debug-log.')
 
 
 @hook('upgrade-charm')
@@ -137,5 +137,5 @@ def upgrade_charm():
         layer.aws.update_policies()
     except layer.aws.AWSError:
         hookenv.log(format_exc(), hookenv.ERROR)
-        layer.status.blocked('error while updating policies; '
-                             'check credentials and debug-log')
+        layer.status.blocked('Error while updating policies; '
+                             'check credentials and debug-log.')
