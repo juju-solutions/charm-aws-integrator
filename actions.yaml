@@ -62,13 +62,13 @@ purge-subnet-tags:
       default: ''
     include:
       description: |
-        Regular expression pattern to filter tag keys by.  If not given, will
+        Regular expression pattern to filter tags by key.  If not given, will
         include all tags.
       type: string
       default: ''
     exclude:
       description: |
-        Regular expression pattern to exclude tag keys by.  If not given, will
+        Regular expression pattern to exclude tags by key.  If not given, will
         not exclude any tags.
       type: string
       default: ''
