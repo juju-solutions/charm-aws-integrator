@@ -63,14 +63,13 @@ purge-subnet-tags:
     include:
       description: |
         Regular expression pattern to filter tag keys by.  If not given, will
-        match all tags.
+        include all tags.
       type: string
       default: ''
     exclude:
       description: |
         Regular expression pattern to exclude tag keys by.  If not given, will
-        match all tags.  Can be used with the subnet-ids and include params to
-        exclude tags which would otherwise be included.
+        not exclude any tags.
       type: string
       default: ''
     dry-run:
