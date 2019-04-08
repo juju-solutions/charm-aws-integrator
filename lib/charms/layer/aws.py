@@ -524,6 +524,14 @@ def _list_policies(model_uuid=None):
                                         model_uuid=model_uuid))
 
 
+def _list_subnet_tags(region):
+    results = _aws('ec2', 'describe-subnets',
+                   '--region', region,
+                   '--query', 'Subnets[*].[SubnetId,Tags]')
+    return {subnet_id: [tag['Key'] for tag in tags]
+            for subnet_id, tags in results if tags}
+
+
 def _get_managed_entities():
     """
     Get the set of IAM entities managed by this charm instance.

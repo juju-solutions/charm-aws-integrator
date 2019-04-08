@@ -31,3 +31,50 @@ update-policies:
   description: |
     Check for new policy definitions and update as needed.  Note: This is done
     automatically on charm upgrade.
+list-subnet-tags:
+  description: |
+    Return a mapping of subnet IDs to a comma-separated list of tags for all
+    subnets in the current or specified region.
+  params:
+    region:
+      description: |
+        Region in which to act.  If not specified, uses the region that
+        this application is deployed into.
+      type: string
+      default: ''
+purge-subnet-tags:
+  description: |
+    Purge tags on all subnets in the current or specified region, optionally
+    filtering or excluding by patterns or subnets.  Returns a mapping of
+    subnet IDs to the tags removed from them.
+  params:
+    region:
+      description: |
+        Region in which to act.  If not specified, uses the region that
+        this application is deployed into.
+      type: string
+      default: ''
+    subnet-ids:
+      description: |
+        Comma-separate list of IDs of subnets from which to remove tags.  If
+        not given, tags from any subnet will be processed.
+      type: string
+      default: ''
+    include:
+      description: |
+        Regular expression pattern to filter tag keys by.  If not given, will
+        match all tags.
+      type: string
+      default: ''
+    exclude:
+      description: |
+        Regular expression pattern to exclude tag keys by.  If not given, will
+        match all tags.  Can be used with the exclude param to exclude tags
+        which would otherwise be included.
+      type: string
+      default: ''
+    dry-run:
+      description: |
+        Report what would be purged without actually removing anything.
+      type: boolean
+      default: false

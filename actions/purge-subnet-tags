@@ -1,0 +1,55 @@
+#!/usr/local/sbin/charm-env python3
+
+import re
+import os
+import string
+
+from charmhelpers.core import hookenv
+from charms import layer
+from reactive import snap
+
+
+layer.import_layer_libs()
+
+
+CSV_PAT = re.compile(r'\s*,\s*')
+ALL_PAT = re.compile(r'.*')  # always matches
+NONE_PAT = re.compile(r'(?!)')  # never matches
+
+JUJU_AZ = os.environ['JUJU_AVAILABILITY_ZONE']
+JUJU_REGION = JUJU_AZ.rstrip(string.ascii_lowercase)
+
+
+try:
+    # ensure /snap/bin is on the path
+    snap.ensure_path()
+
+    region = hookenv.action_get('region') or JUJU_REGION
+    subnet_ids = hookenv.action_get('subnet-ids')
+    include = re.compile(hookenv.action_get('include') or ALL_PAT)
+    exclude = re.compile(hookenv.action_get('exclude') or NONE_PAT)
+    dry_run = hookenv.action_get('dry-run')
+    subnet_tags = layer.aws._list_subnet_tags(region)
+    removed_tags = {}
+    if subnet_ids:
+        subnet_ids = CSV_PAT.split(subnet_ids)
+    else:
+        subnet_ids = subnet_tags.keys()
+    for subnet_id in subnet_ids:
+        tags = subnet_tags[subnet_id]
+        tags = [tag for tag in tags if include.search(tag)]
+        tags = [tag for tag in tags if not exclude.search(tag)]
+        if not tags:
+            continue
+        if not dry_run:
+            layer.aws._cleanup_subnet_tags(region, subnet_id, tags)
+        removed_tags[subnet_id] = tags
+        hookenv.log('Tags {}removed from subnet {}: {}'.format(
+            'would be ' if dry_run else '',
+            subnet_id,
+            ', '.join(tags)), hookenv.DEBUG)
+    hookenv.action_set({'tags.{}'.format(k): ', '.join(v)
+                        for k, v in removed_tags.items()})
+    hookenv.action_set({'removed': not dry_run})
+except layer.aws.AWSError as e:
+    hookenv.action_fail(e.message)
