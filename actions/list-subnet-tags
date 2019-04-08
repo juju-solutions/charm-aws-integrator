@@ -1,0 +1,26 @@
+#!/usr/local/sbin/charm-env python3
+
+import os
+import string
+
+from charmhelpers.core import hookenv
+from charms import layer
+from reactive import snap
+
+
+layer.import_layer_libs()
+
+JUJU_AZ = os.environ['JUJU_AVAILABILITY_ZONE']
+JUJU_REGION = JUJU_AZ.rstrip(string.ascii_lowercase)
+
+
+try:
+    # ensure /snap/bin is on the path
+    snap.ensure_path()
+
+    region = hookenv.action_get('region') or JUJU_REGION
+    subnet_tags = layer.aws._list_subnet_tags(region)
+    hookenv.action_set({'tags.{}'.format(k): ', '.join(v)
+                        for k, v in subnet_tags.items()})
+except layer.aws.AWSError as e:
+    hookenv.action_fail(e.message)

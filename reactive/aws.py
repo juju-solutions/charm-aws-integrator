@@ -72,6 +72,7 @@ def handle_requests():
                     request.instance_security_group_tags)
             if request.instance_subnet_tags:
                 layer.aws.tag_instance_subnet(
+                    request.application_name,
                     request.instance_id,
                     request.region,
                     request.instance_subnet_tags)
@@ -139,3 +140,13 @@ def upgrade_charm():
         hookenv.log(format_exc(), hookenv.ERROR)
         layer.status.blocked('error while updating policies; '
                              'check credentials and debug-log')
+
+
+@hook('stop')
+def final_cleanup():
+    try:
+        # cleanup all managed entities, including
+        # ones we might have missed previously
+        layer.aws.cleanup([])
+    except layer.aws.AWSError:
+        pass  # can't stop the stop

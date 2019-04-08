@@ -4,6 +4,7 @@ import re
 import sys
 import subprocess
 from base64 import b64decode
+from collections import defaultdict
 from math import ceil, floor
 from time import sleep
 from configparser import ConfigParser, MissingSectionHeaderError
@@ -141,7 +142,7 @@ def tag_instance_security_group(instance_id, region, tags):
     _apply_tags(region, [group_id], tags)
 
 
-def tag_instance_subnet(instance_id, region, tags):
+def tag_instance_subnet(application_name, instance_id, region, tags):
     """
     Tag the subnet for the given instance with the given tags.
 
@@ -158,6 +159,9 @@ def tag_instance_subnet(instance_id, region, tags):
                                 '.SubnetId[] | [0]')
     if subnet_id is not None:
         _apply_tags(region, [subnet_id], tags)
+        _add_app_entity(application_name,
+                        'subnet-tags',
+                        ((region, subnet_id), list(tags.keys())))
     else:
         log('Unable to determine subnet ID for {}; possibly EC2-Classic',
             instance_id)
@@ -371,7 +375,8 @@ def cleanup(current_applications):
     departed_applications = managed_entities.keys() - current_applications
     if not departed_applications:
         return
-    log('Cleaning up unused AWS entities')
+    log('Cleaning up {} AWS entities',
+        'unused' if current_applications else 'all')
     for app in departed_applications:
         entities = managed_entities.pop(app)
         for role in entities['role']:
@@ -380,6 +385,12 @@ def cleanup(current_applications):
             _cleanup_instance_profile(instance_profile)
         for policy in entities['policy']:
             _cleanup_policy(policy)
+        # group subnet tags by region / subnet-id pair
+        subnet_tags = defaultdict(list)
+        for (region, subnet_id), tags in entities['subnet-tags']:
+            subnet_tags[(region, subnet_id)].extend(tags)
+        for (region, subnet_id), tags in subnet_tags.items():
+            _cleanup_subnet_tags(region, subnet_id, tags)
     _set_managed_entities(managed_entities)
 
 
@@ -513,6 +524,14 @@ def _list_policies(model_uuid=None):
                                         model_uuid=model_uuid))
 
 
+def _list_subnet_tags(region):
+    results = _aws('ec2', 'describe-subnets',
+                   '--region', region,
+                   '--query', 'Subnets[*].[SubnetId,Tags]')
+    return {subnet_id: [tag['Key'] for tag in tags]
+            for subnet_id, tags in results if tags}
+
+
 def _get_managed_entities():
     """
     Get the set of IAM entities managed by this charm instance.
@@ -529,6 +548,7 @@ def _add_app_entity(app_name, entity_type, entity_name):
         'role': [],
         'instance-profile': [],
         'policy': [],
+        'subnet-tags': [],
     })
     if entity_name not in app_entities[entity_type]:
         app_entities[entity_type].append(entity_name)
@@ -853,5 +873,19 @@ def _cleanup_policy(policy_arn):
             if policy_file.exists():
                 policy_file.unlink()
         log('Deleted IAM policy {}', policy_arn)
+    except DoesNotExistAWSError:
+        pass
+
+
+def _cleanup_subnet_tags(region, subnet_id, tags):
+    """
+    Cleanup an IAM instance-profile.
+    """
+    try:
+        _aws(*(['ec2', 'delete-tags'] +
+               ['--region', region] +
+               ['--resources', subnet_id] +
+               ['--tags'] + ['Key={}'.format(tag) for tag in tags]))
+        log('Deleted tags from subnet {}: {}', subnet_id, ','.join(tags))
     except DoesNotExistAWSError:
         pass
