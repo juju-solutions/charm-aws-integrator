@@ -126,10 +126,12 @@ def handle_requests():
             layer.aws.log('Finished request for {}'.format(request.unit_name))
             request.mark_completed()
         clear_flag('endpoint.aws.requested')
-    except layer.aws.AWSError:
+    except layer.aws.AWSError as e:
         hookenv.log(format_exc(), hookenv.ERROR)
-        layer.status.blocked('Error while granting requests; '
-                             'check credentials and debug-log')
+        layer.status.blocked('Error while granting requests ({}); '
+                             'check credentials and debug-log'.format(
+                                 e.error_type or 'unknown'
+                             ))
 
 
 @hook('upgrade-charm')
