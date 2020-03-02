@@ -10,6 +10,7 @@ maintainers: ['Cory Johns <cory.johns@canonical.com>']
 series:
   - xenial
   - bionic
+  - focal
 tags: ['aws', 'native', 'integration']
 provides:
   aws:
