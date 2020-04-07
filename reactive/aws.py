@@ -144,6 +144,11 @@ def upgrade_charm():
                              'check credentials and debug-log')
 
 
+@hook('pre-series-upgrade')
+def pre_series_upgrade():
+    layer.status.blocked('Series upgrade in progress')
+
+
 @hook('stop')
 def final_cleanup():
     try:
