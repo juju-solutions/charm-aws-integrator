@@ -44,6 +44,7 @@ def get_creds():
 @when_all('snap.installed.aws-cli',
           'charm.aws.creds.set')
 @when_not('endpoint.aws.requested')
+@when_not('upgrade.series.in-progress')
 def no_requests():
     layer.status.maintenance('Cleaning up unused AWS entities')
     aws = endpoint_from_name('aws')
@@ -54,6 +55,7 @@ def no_requests():
 @when_all('snap.installed.aws-cli',
           'charm.aws.creds.set',
           'endpoint.aws.requested')
+@when_not('upgrade.series.in-progress')
 def handle_requests():
     aws = endpoint_from_name('aws')
     try:
@@ -142,6 +144,11 @@ def upgrade_charm():
         hookenv.log(format_exc(), hookenv.ERROR)
         layer.status.blocked('Error while updating policies; '
                              'check credentials and debug-log')
+
+
+@hook('pre-series-upgrade')
+def pre_series_upgrade():
+    layer.status.blocked('Series upgrade in progress')
 
 
 @hook('stop')
