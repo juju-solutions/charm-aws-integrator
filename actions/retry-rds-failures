@@ -1,0 +1,58 @@
+#!/usr/local/sbin/charm-env python3
+
+from charmhelpers.core import hookenv, unitdata
+from charms.reactive import Endpoint, endpoint_from_name
+from charms import layer
+
+
+layer.import_layer_libs()
+Endpoint._startup()
+
+mysql_rds = layer.aws.MySQLRDSManager()
+mysql_clients = endpoint_from_name('rds-mysql')
+
+reqs = set(mysql_clients.database_requests() if mysql_clients else [])
+abandonded_failures = mysql_rds.failed_creates - set(reqs)
+if abandonded_failures:
+    mysql_rds.remove_failed_creates(abandonded_failures)
+
+if mysql_rds.failed_deletes:
+    layer.aws.log('Retrying {} failed RDS MySQL database deletions',
+                  len(mysql_rds.failed_creates))
+    layer.status.maintenance('Retrying failed RDS MySQL database deletions')
+for req in mysql_rds.failed_deletes:
+    mysql_rds.delete_db(req)
+
+if mysql_rds.failed_creates:
+    layer.aws.log('Retrying {} failed RDS MySQL database creations',
+                  len(mysql_rds.failed_creates))
+    layer.status.maintenance('Retrying failed RDS MySQL database creations')
+for req in mysql_rds.failed_creates:
+    mysql_rds.create_db(req)
+
+if mysql_rds.pending:
+    completed = mysql_rds.poll_pending()
+    layer.status.maintenance('Waiting for RDS MySQL databases')
+    for req, db in completed.items():
+        mysql_clients.provide_database(req,
+                                       host=db['host'],
+                                       port=db['port'],
+                                       database_name=db['database'],
+                                       user=db['username'],
+                                       password=db['password'])
+
+hookenv.action_set({
+    'active': list(mysql_rds.active.values()),
+    'pending': list(mysql_rds.pending),
+    'failed-creates': list(mysql_rds.failed_creates),
+    'failed-deletes': list(mysql_rds.failed_deletes),
+})
+if mysql_rds.failed_creates or mysql_rds.failed_deletes:
+    layer.status.blocked('Failed retrying RDS MySQL operations')
+    hookenv.action_fail('failed')
+elif mysql_rds.pending:
+    layer.status.waiting('Waiting for RDS MySQL databases')
+else:
+    layer.status.active('Ready')
+
+unitdata.kv().flush()

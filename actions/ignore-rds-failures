@@ -1,0 +1,19 @@
+#!/usr/local/sbin/charm-env python3
+
+from charmhelpers.core import hookenv, unitdata
+from charms import layer
+
+
+layer.import_layer_libs()
+
+mysql_rds = layer.aws.MySQLRDSManager()
+mysql_rds.ignore_all_failures()
+
+layer.status.active('Ready')
+hookenv.action_set({
+    'active': list(mysql_rds.active.values()),
+    'pending': list(mysql_rds.pending),
+    'failed-creates': list(mysql_rds.failed_creates),
+    'failed-deletes': list(mysql_rds.failed_deletes),
+})
+unitdata.kv().flush()

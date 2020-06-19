@@ -4,6 +4,7 @@ includes:
   - 'layer:status'
   - 'layer:snap'
   - 'interface:aws-integration'
+  - 'interface:mysql'
 options:
   basic:
     use_venv: true

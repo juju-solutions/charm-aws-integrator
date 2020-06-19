@@ -26,3 +26,15 @@ options:
       It is strongly recommended that you use 'juju trust' instead, if available.
     type: string
     default: ""
+  rds-mysql-instance-class:
+    description: Instance class to use for RDS MySQL databases.
+    type: string
+    default: "db.t3.small"
+  rds-mysql-port:
+    description: Port to use for RDS MySQL databases.
+    type: int
+    default: 3306
+  rds-mysql-storage:
+    description: Amount of storage (in GiB) to allocate for RDS MySQL databases.
+    type: int
+    default: 20
