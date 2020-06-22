@@ -77,3 +77,7 @@ purge-subnet-tags:
         Report what would be purged without actually removing anything.
       type: boolean
       default: false
+retry-rds-failures:
+  description: Retry any failed RDS database operations.
+ignore-rds-failures:
+  description: Ignore any failed RDS database operations.

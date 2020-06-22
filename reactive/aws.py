@@ -46,9 +46,10 @@ def get_creds():
 @when_not('endpoint.aws.requested')
 @when_not('upgrade.series.in-progress')
 def no_requests():
-    layer.status.maintenance('Cleaning up unused AWS entities')
     aws = endpoint_from_name('aws')
-    layer.aws.cleanup(aws.application_names)
+    if aws and aws.application_names:
+        layer.status.maintenance('Cleaning up unused AWS entities')
+        layer.aws.cleanup(aws.application_names)
     layer.status.active('Ready')
 
 
@@ -136,6 +137,67 @@ def handle_requests():
                              ))
 
 
+@when_all('snap.installed.aws-cli',
+          'charm.aws.creds.set',
+          'rds-mysql.database.requested')
+@when_not('upgrade.series.in-progress')
+def handle_mysql_requests():
+    mysql_clients = endpoint_from_name('rds-mysql')
+    mysql_rds = layer.aws.MySQLRDSManager()
+    reqs = {req: app for req, app in mysql_clients.database_requests().items()
+            if app and req not in (mysql_rds.failed_creates |
+                                   set(mysql_rds.active) |
+                                   set(mysql_rds.pending))}
+
+    for req, app in reqs.items():
+        layer.status.maintenance('Creating RDS MySQL database for ' + app)
+        mysql_rds.create_db(req)
+
+    if mysql_rds.pending:
+        layer.status.maintenance('Waiting for RDS MySQL databases')
+        completed = mysql_rds.poll_pending()
+        for req, db in completed.items():
+            mysql_clients.provide_database(req,
+                                           host=db['host'],
+                                           port=db['port'],
+                                           database_name=db['database'],
+                                           user=db['username'],
+                                           password=db['password'])
+
+    if mysql_rds.failed_creates:
+        layer.status.blocked('Failed to create one or '
+                             'more RDS MySQL databases')
+    elif mysql_rds.pending:
+        layer.status.waiting('Waiting for RDS MySQL databases')
+    else:
+        layer.status.active('Ready')
+
+
+@when_all('snap.installed.aws-cli',
+          'charm.aws.creds.set')
+@when_not('upgrade.series.in-progress')
+def cleanup_mysql_dbs():
+    mysql_clients = endpoint_from_name('rds-mysql')
+    mysql_rds = layer.aws.MySQLRDSManager()
+    reqs = set(mysql_clients.database_requests() if mysql_clients else [])
+
+    abandonded_dbs = (set(mysql_rds.active) | set(mysql_rds.pending)) - reqs
+    if abandonded_dbs:
+        layer.status.maintenance('Cleaning up {} RDS MySQL database{}'.format(
+            len(abandonded_dbs), 's' if len(abandonded_dbs) > 1 else ''
+        ))
+        for req in abandonded_dbs:
+            mysql_rds.delete_db(req)
+
+    abandonded_failures = mysql_rds.failed_creates - reqs
+    if abandonded_failures:
+        mysql_rds.remove_failed_creates(abandonded_failures)
+
+    if mysql_rds.failed_deletes:
+        layer.status.blocked('Failed to delete one or '
+                             'more RDS MySQL databases')
+
+
 @hook('upgrade-charm')
 def upgrade_charm():
     try:
@@ -157,5 +219,6 @@ def final_cleanup():
         # cleanup all managed entities, including
         # ones we might have missed previously
         layer.aws.cleanup([])
+        cleanup_mysql_dbs()
     except layer.aws.AWSError:
         pass  # can't stop the stop
