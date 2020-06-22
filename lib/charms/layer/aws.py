@@ -30,6 +30,8 @@ REGION = os.environ['JUJU_AVAILABILITY_ZONE'].rstrip(string.ascii_lowercase)
 MAX_ROLE_NAME_LEN = 64
 MAX_POLICY_NAME_LEN = 128
 
+urandom = SystemRandom()
+
 
 def log(msg, *args):
     hookenv.log(msg.format(*args), hookenv.INFO)
@@ -401,9 +403,11 @@ class RDSManager:
             'failed_deletes': self.failed_deletes,
         })
 
+    def _pwgen(self, alphabet, length):
+        return ''.join([urandom.choice(alphabet) for k in range(length)])
+
     def create_db(self, req):
-        urandom = SystemRandom()
-        db_id = 'charm-aws-' + ''.join(urandom.choices(string.hexdigits, k=4))
+        db_id = 'charm-aws-' + self._pwgen(string.hexdigits, 4)
 
         # copy our unit's SGs to the DB so that other units can connect to it
         model_sg_name = 'juju-{}'.format(MODEL_UUID)
@@ -415,9 +419,9 @@ class RDSManager:
         # have to open the port to allow rule to be added to SG for CMR
         hookenv.open_port(self.port)
 
-        db_name = ''.join(urandom.choices(string.ascii_lowercase, k=8))
-        username = ''.join(urandom.choices(string.ascii_lowercase, k=10))
-        password = ''.join(urandom.choices(string.hexdigits, k=32))
+        db_name = self._pwgen(string.ascii_lowercase, 8)
+        username = self._pwgen(string.ascii_lowercase, 10)
+        password = self._pwgen(string.hexdigits, 32)
 
         try:
             _aws('rds', 'create-db-instance',
