@@ -3,10 +3,14 @@ import os
 import re
 import sys
 import subprocess
+import string
 from base64 import b64decode
 from collections import defaultdict
+from datetime import datetime, timedelta
 from math import ceil, floor
+from random import SystemRandom
 from time import sleep
+from traceback import format_exc
 from configparser import ConfigParser, MissingSectionHeaderError
 from pathlib import Path
 
@@ -21,8 +25,12 @@ from charms.layer import status
 
 ENTITY_PREFIX = 'charm.aws'
 MODEL_UUID = os.environ['JUJU_MODEL_UUID']
+MACHINE_ID = os.environ['JUJU_MACHINE_ID']
+REGION = os.environ['JUJU_AVAILABILITY_ZONE'].rstrip(string.ascii_lowercase)
 MAX_ROLE_NAME_LEN = 64
 MAX_POLICY_NAME_LEN = 128
+
+urandom = SystemRandom()
 
 
 def log(msg, *args):
@@ -366,6 +374,158 @@ def update_policies():
     return stats
 
 
+class RDSManager:
+    """
+    Base class for managing RDS databases.
+    """
+    db_type = None
+
+    def __init__(self):
+        prefix = 'rds-{}-'.format(self.db_type)
+        config = {key[len(prefix):]: value
+                  for key, value in hookenv.config().items()
+                  if key.startswith(prefix)}
+        self.port = config['port']
+        self.allocated_storage = config['storage']
+        self.instance_class = config['instance-class']
+        self._key = 'charm.aws.rds.{}'.format(self.db_type)
+        data = kv().get(self._key, {})
+        self.active = data.get('active', {})
+        self.pending = data.get('pending', {})
+        self.failed_creates = set(data.get('failed_creates', []))
+        self.failed_deletes = data.get('failed_deletes', {})
+
+    def _flush(self):
+        kv().set(self._key, {
+            'active': self.active,
+            'pending': self.pending,
+            'failed_creates': list(self.failed_creates),
+            'failed_deletes': self.failed_deletes,
+        })
+
+    def _pwgen(self, alphabet, length):
+        return ''.join([urandom.choice(alphabet) for k in range(length)])
+
+    def create_db(self, req):
+        db_id = 'charm-aws-' + self._pwgen(string.hexdigits, 4)
+
+        # copy our unit's SGs to the DB so that other units can connect to it
+        model_sg_name = 'juju-{}'.format(MODEL_UUID)
+        unit_sg_name = 'juju-{}-{}'.format(MODEL_UUID, MACHINE_ID)
+        sg_info = _aws('ec2', 'describe-security-groups',
+                       '--region', REGION,
+                       '--group-names', model_sg_name, unit_sg_name)
+        sg_ids = [sg['GroupId'] for sg in sg_info['SecurityGroups']]
+        # have to open the port to allow rule to be added to SG for CMR
+        hookenv.open_port(self.port)
+
+        db_name = self._pwgen(string.ascii_lowercase, 8)
+        username = self._pwgen(string.ascii_lowercase, 10)
+        password = self._pwgen(string.hexdigits, 32)
+
+        try:
+            _aws('rds', 'create-db-instance',
+                 '--region', REGION,
+                 '--db-instance-identifier', db_id,
+                 '--vpc-security-group-ids', sg_ids[0], sg_ids[1],
+                 '--db-instance-class', self.instance_class,
+                 '--port', str(self.port),
+                 '--allocated-storage', str(self.allocated_storage),
+                 '--db-name', db_name,
+                 '--engine', 'mysql',
+                 '--master-username', username,
+                 '--master-user-password', password)
+        except AWSError:
+            log_err(format_exc())
+            self.failed_creates.add(req)
+        else:
+            self.pending[req] = {
+                'id': db_id,
+                'host': None,
+                'port': self.port,
+                'database': db_name,
+                'username': username,
+                'password': password,
+            }
+        self._flush()
+
+    def poll_pending(self):
+        completed = {}
+
+        def _poll_pending():
+            log('Polling RDS MySQL databases')
+            for req, db in list(self.pending.items()):
+                try:
+                    result = _aws('rds', 'describe-db-instances',
+                                  '--region', REGION,
+                                  '--db-instance-identifier', db['id'])
+                    result = result['DBInstances'][0]
+                except DoesNotExistAWSError:
+                    self.failed_creates.add(req)
+                    del self.pending[req]
+                    continue
+                status = result['DBInstanceStatus']
+                host = result.get('Endpoint', {}).get('Address')
+                if status in ('available', 'backing-up') and host:
+                    db['host'] = host
+                    completed[req] = self.pending.pop(req)
+                    self.active[req] = db['id']
+                elif status == 'deleting':
+                    self.failed_creates.add(req)
+                    del self.pending[req]
+                    continue
+                else:
+                    log('  {} is {} with address {}', db['id'], status, host)
+            if self.pending:
+                raise NotReadyAWSError('RDS MySQL database still pending')
+            else:
+                log('RDS MySQL databases are all active')
+
+        try:
+            _retry_for_entity_delay(_poll_pending, timeout=2*60)
+        except TimeoutAWSError:
+            # these things take a long time to come up, like 7~8 min
+            log('RDS MySQL database still pending, will retry on next hook')
+
+        self._flush()
+        return completed
+
+    def delete_db(self, req):
+        if req in self.active:
+            db_id = self.active.pop(req)
+        elif req in self.pending:
+            db = self.pending.pop(req)
+            db_id = db['id']
+        elif req in self.failed_deletes:
+            db_id = self.failed_deletes.pop(req)
+        else:
+            raise KeyError(req)
+        try:
+            _aws('rds', 'delete-db-instance',
+                 '--region', REGION,
+                 '--db-instance-identifier', db_id,
+                 '--skip-final-snapshot')
+        except DoesNotExistAWSError:
+            pass
+        except AWSError:
+            log_err(format_exc())
+            self.failed_deletes[req] = db_id
+        self._flush()
+
+    def remove_failed_creates(self, reqs):
+        self.failed_creates.intersection_update(reqs)
+        self._flush()
+
+    def ignore_all_failures(self):
+        self.failed_creates.clear()
+        self.failed_deletes.clear()
+        self._flush()
+
+
+class MySQLRDSManager(RDSManager):
+    db_type = 'mysql'
+
+
 def cleanup(current_applications):
     """
     Cleanup unused IAM entities from the current model that are being managed
@@ -434,6 +594,7 @@ class DoesNotExistAWSError(AWSError):
     error_types = [
         'NoSuchEntity',
         'InvalidParameterValue',
+        'DBInstanceNotFound',
     ]
 
 
@@ -446,6 +607,22 @@ class AlreadyExistsAWSError(AWSError):
         'LimitExceeded',
         'IncorrectState',
     ]
+
+
+class NotReadyAWSError(AWSError):
+    """
+    Meta-error subclass of AWSError representing something not being ready.
+    """
+    def __init__(self, message):
+        super().__init__('not-ready', message)
+
+
+class TimeoutAWSError(AWSError):
+    """
+    Meta-error subclass of AWSError representing something timing out.
+    """
+    def __init__(self):
+        super().__init__('timed-out', 'timed out')
 
 
 def _elide(s, max_len, ellipsis='...'):
@@ -562,7 +739,7 @@ def _set_managed_entities(managed_entities):
     kv().set('charm.aws.managed-entities', managed_entities)
 
 
-def _retry_for_entity_delay(func):
+def _retry_for_entity_delay(func, timeout=60):
     """
     Retry the given function a few times if it raises a DoesNotExistAWSError
     with an increasing delay.
@@ -572,17 +749,21 @@ def _retry_for_entity_delay(func):
     that indicate that an entity is not available, which may be a temporary
     state after adding it.
     """
-    for attempt in range(4):
+    timeout = timedelta(seconds=timeout)
+    start_time = datetime.now()
+    attempt = 0
+    while datetime.now() - start_time < timeout:
+        attempt += 1
         try:
             func()
             break
-        except DoesNotExistAWSError as e:
+        except (DoesNotExistAWSError, NotReadyAWSError) as e:
             log(e.message)
-            if attempt == 3:
-                raise AWSError(None, 'Timed out waiting for entity')
-            delay = 10 * (attempt + 1)
+            delay = min(10 * attempt, 30)
             log('Retrying in {} seconds', delay)
             sleep(delay)
+    else:
+        raise TimeoutAWSError()
 
 
 def _apply_tags(region, resources, tags):
