@@ -1,7 +1,12 @@
-This charm acts as a proxy to AWS and provides additional features and access
-which depend on underlying AWS services.
+# Overview
 
-Please see [the documentation][docs] for details.
+This charm acts as a proxy to AWS and provides an [interface][] to apply a
+certain set of changes via IAM roles, profiles, and tags to the instances of
+the applications that are related to this charm.
 
+This charm can also act as a proxy to some AWS cloud services, such as RDS MySQL.
 
-[docs]: https://ubuntu.com/kubernetes/docs/charm-aws-integrator
+This charm is a component of Charmed Kubernetes. For full information,
+please visit the [official Charmed Kubernetes docs](https://www.ubuntu.com/kubernetes/docs/charm-aws-integrator).
+
+[interface]: https://github.com/juju-solutions/interface-aws-integration
