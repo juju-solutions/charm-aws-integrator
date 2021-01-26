@@ -23,11 +23,12 @@ We have adopted the Ubuntu code of Conduct. You can read this in full [here](htt
 
 The workflow for contributing code is as follows:
 
-1. 
-2. 
-3.
-4. 
-5. 
+1. [Submit a bug](https://bugs.launchpad.net/charm-aws-integrator/+filebug) to explain the need for and track the change.
+2. Create a branch on your fork of the repo with your changes, including a unit test covering the new or modified code.
+3. Submit a PR. The PR description should include a link to the bug on Launchpad.
+4. Update the Launchpad bug to include a link to the PR and the `review-needed` tag.
+5. Once reviewed and merged, the change will become available on the edge channel and assigned to an appropriate milestone
+   for further release according to priority.
 
 ## Documentation
 
