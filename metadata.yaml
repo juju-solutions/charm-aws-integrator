@@ -6,6 +6,7 @@ description: |
   This charm can grant select permissions to instances of applications
   related to it which enable integration with AWS specific features,
   such as ELB, EBS, etc.
+docs: docs: https://discourse.charmhub.io/t/aws-integrator-docs-index/6100
 maintainers: ['Cory Johns <cory.johns@canonical.com>']
 series:
   - xenial
