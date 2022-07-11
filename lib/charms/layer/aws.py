@@ -507,9 +507,9 @@ class RDSManager:
                 db_name,
                 "--engine",
                 "mysql",
-                "--master-username",
+                "--master-username",  # wokeignore:rule=master
                 username,
-                "--master-user-password",
+                "--master-user-password",  # wokeignore:rule=master
                 password,
             )
         except AWSError:
