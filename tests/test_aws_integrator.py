@@ -1,4 +1,5 @@
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
+import pytest
 
 from charms.unit_test import patch_fixture
 
@@ -21,13 +22,20 @@ def test_series_upgrade():
     assert layer.status.blocked.call_count == 1
 
 
-def test_rds_mysql_api(_aws):
+@pytest.fixture
+def mock_kv():
+    orig = unitdata.kv.return_value
+    unitdata.kv.return_value = MagicMock()
+    yield unitdata.kv.return_value
+    unitdata.kv.return_value = orig
+
+def test_rds_mysql_api(_aws, mock_kv):
     hookenv.config.return_value = {
         'rds-mysql-port': 3306,
         'rds-mysql-storage': 20,
         'rds-mysql-instance-class': 'db.t3.small',
     }
-    unitdata.kv().get.return_value = {}
+    mock_kv.get.return_value = {}
     mysql_rds = layer_aws.MySQLRDSManager()
     _aws.side_effect = [
         {'SecurityGroups': [{'GroupId': 'sg-1'}, {'GroupId': 'sg-2'}]},
@@ -42,16 +50,16 @@ def test_rds_mysql_api(_aws):
     assert len(mysql_rds.failed_creates) == 0
     assert len(mysql_rds.pending) == 1
     assert len(mysql_rds.active) == 0
-    assert unitdata.kv().set.call_count == 1
+    assert mock_kv.set.call_count == 1
     mysql_rds.poll_pending()
     assert len(mysql_rds.pending) == 0
     assert len(mysql_rds.active) == 1
-    assert unitdata.kv().set.call_count == 2
+    assert mock_kv.set.call_count == 2
     mysql_rds.delete_db('1')
     assert len(mysql_rds.failed_deletes) == 0
     assert len(mysql_rds.active) == 0
     assert len(mysql_rds.pending) == 0
-    assert unitdata.kv().set.call_count == 3
+    assert mock_kv.set.call_count == 3
 
 
 def test_rds_mysql_handle_requests(mysql_api):
