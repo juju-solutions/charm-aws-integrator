@@ -12,6 +12,7 @@ series:
   - xenial
   - bionic
   - focal
+  - jammy
 tags: ['aws', 'native', 'integration']
 provides:
   aws:
