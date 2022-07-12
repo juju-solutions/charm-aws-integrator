@@ -9,10 +9,10 @@ description: |
 docs: https://discourse.charmhub.io/t/aws-integrator-docs-index/6100
 maintainers: ['Cory Johns <cory.johns@canonical.com>']
 series:
-  - xenial
-  - bionic
   - focal
   - jammy
+  - bionic
+  - xenial
 tags: ['aws', 'native', 'integration']
 provides:
   aws:
