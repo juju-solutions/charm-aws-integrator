@@ -87,7 +87,15 @@ def handle_requests():
                 layer.aws.enable_acm_fullaccess(
                     request.application_name, request.instance_id, request.region
                 )
+            if request.requested_autoscaling_readonly:
+                layer.aws.enable_autoscaling_readonly(
+                    request.application_name, request.instance_id, request.region
+                )
             if request.requested_instance_inspection:
+                layer.aws.enable_instance_inspection(
+                    request.application_name, request.instance_id, request.region
+                )
+            if request.requested_instance_modification:
                 layer.aws.enable_instance_inspection(
                     request.application_name, request.instance_id, request.region
                 )
@@ -105,6 +113,10 @@ def handle_requests():
                 )
             if request.requested_dns_management:
                 layer.aws.enable_dns_management(
+                    request.application_name, request.instance_id, request.region
+                )
+            if request.requested_region_readonly:
+                layer.aws.enable_region_readonly(
                     request.application_name, request.instance_id, request.region
                 )
             if request.requested_object_storage_access:

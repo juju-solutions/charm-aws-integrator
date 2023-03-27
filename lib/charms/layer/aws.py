@@ -7,6 +7,7 @@ import string
 from base64 import b64decode
 from collections import defaultdict
 from datetime import datetime, timedelta
+from functools import partial
 from math import ceil, floor
 from random import SystemRandom
 from time import sleep
@@ -192,172 +193,60 @@ def tag_instance_subnet(application_name, instance_id, region, tags):
         log("Unable to determine subnet ID for {}; possibly EC2-Classic", instance_id)
 
 
-def enable_acm_readonly(application_name, instance_id, region):
+def _enable_policy(policy_name, application_name, instance_id, region, patterns=None):
     """
-    Enable readonly access to ACM for the given instance.
+    Enable policy by name.
     """
+    policy = POLICIES[policy_name]
+    supports_patterns = patterns and policy.get("supports-patterns")
     log(
-        "Enabling readonly access to ACM for instance {} "
-        "of application {} in region {}",
+        "{} for instance {} of application {} in region {}",
+        policy["description"],
         instance_id,
         application_name,
         region,
     )
-    policy_name = "acm-readonly"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_acm_fullaccess(application_name, instance_id, region):
-    """
-    Enable fullaccess to ACM for the given instance.
-    """
-    log(
-        "Enabling fullaccess to ACM for instance {} " "of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "acm-fullaccess"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_instance_inspection(application_name, instance_id, region):
-    """
-    Enable instance inspection access for the given instance.
-    """
-    log(
-        "Enabling instance inspection for instance {} "
-        "of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "instance-inspection"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_network_management(application_name, instance_id, region):
-    """
-    Enable network (firewall, subnet, etc.) management for the given
-    instance.
-    """
-    log(
-        "Enabling network management for instance {} " "of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "network-management"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_load_balancer_management(application_name, instance_id, region):
-    """
-    Enable load balancer (ELB) management for the given instance.
-    """
-    log(
-        "Enabling ELB for instance {} of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "elb"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_block_storage_management(application_name, instance_id, region):
-    """
-    Enable block storage (EBS) management for the given instance.
-    """
-    log(
-        "Enabling EBS for instance {} of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "ebs"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_dns_management(application_name, instance_id, region):
-    """
-    Enable DNS (Route53) management for the given instance.
-    """
-    log(
-        "Enabling DNS (Route53) management for instance {} of "
-        "application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "route53"
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-
-
-def enable_object_storage_access(application_name, instance_id, region, patterns):
-    """
-    Enable object storage (S3) read-only access for the given instance to
-    resources matching the given patterns.
-    """
-    log(
-        "Enabling object storage (S3) read for instance {} of "
-        "application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "s3-read"
-    if patterns:
+    if supports_patterns:
         policy_name = _restrict_policy_for_app(policy_name, application_name, patterns)
     policy_arn = _get_policy_arn(policy_name)
     role_name = _get_role_name(application_name, instance_id, region)
     _ensure_policy(policy_name)
     _attach_policy(policy_arn, role_name)
-    if patterns:
+    if supports_patterns:
         _add_app_entity(application_name, "policy", policy_arn)
 
 
-def enable_object_storage_management(application_name, instance_id, region, patterns):
-    """
-    Enable object storage (S3) management for the given instance to
-    resources matching the given patterns.
-    """
-    log(
-        "Enabling S3 write for instance {} of application {} in region {}",
-        instance_id,
-        application_name,
-        region,
-    )
-    policy_name = "s3-write"
-    if patterns:
-        policy_name = _restrict_policy_for_app(policy_name, application_name, patterns)
-    policy_arn = _get_policy_arn(policy_name)
-    role_name = _get_role_name(application_name, instance_id, region)
-    _ensure_policy(policy_name)
-    _attach_policy(policy_arn, role_name)
-    if patterns:
-        _add_app_entity(application_name, "policy", policy_arn)
+POLICIES = {
+    "acm-fullaccess": {"description": "Enabling fullaccess to ACM"},
+    "acm-readonly": {"description": "Enabling readonly access to ACM"},
+    "autoscaling-readonly": {"description": "Enabling autoscaling readonly access"},
+    "ebs": {"description": "Enabling EBS"},
+    "elb": {"description": "Enabling ELB"},
+    "instance-inspection": {"description": "Enabling instance inspection"},
+    "instance-modification": {"description": "Enabling instance modification"},
+    "network-management": {"description": "Enabling network management"},
+    "region-readonly": {"description": "Enabling Region readonly management"},
+    "route53": {"description": "Enabling DNS (Route53) management"},
+    "s3-read": {
+        "description": "Enabling object storage (S3) read",
+        "supports-patterns": True,
+    },
+    "s3-write": {"description": "Enabling S3 write", "supports-patterns": True},
+}
+
+
+enable_acm_readonly = partial(_enable_policy, "acm-readonly")
+enable_acm_fullaccess = partial(_enable_policy, "acm-fullaccess")
+enable_autoscaling_readonly = partial(_enable_policy, "autoscaling-readonly")
+enable_block_storage_management = partial(_enable_policy, "ebs")
+enable_load_balancer_management = partial(_enable_policy, "elb")
+enable_instance_inspection = partial(_enable_policy, "instance-inspection")
+enable_instance_modification = partial(_enable_policy, "instance-modification")
+enable_network_management = partial(_enable_policy, "network-management")
+enable_region_readonly = partial(_enable_policy, "region-readonly")
+enable_dns_management = partial(_enable_policy, "route53")
+enable_object_storage_access = partial(_enable_policy, "s3-read")
+enable_object_storage_management = partial(_enable_policy, "s3-write")
 
 
 def update_policies():
