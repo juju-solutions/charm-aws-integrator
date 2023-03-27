@@ -96,7 +96,7 @@ def handle_requests():
                     request.application_name, request.instance_id, request.region
                 )
             if request.requested_instance_modification:
-                layer.aws.enable_instance_inspection(
+                layer.aws.enable_instance_modification(
                     request.application_name, request.instance_id, request.region
                 )
             if request.requested_network_management:
