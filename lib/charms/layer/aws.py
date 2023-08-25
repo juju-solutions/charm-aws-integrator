@@ -58,7 +58,7 @@ def get_credentials():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        creds = yaml.load(result.stdout.decode("utf8"))
+        creds = yaml.safe_load(result.stdout.decode("utf8"))
         access_key = creds["credential"]["attributes"]["access-key"]
         secret_key = creds["credential"]["attributes"]["secret-key"]
         update_credentials_file(access_key, secret_key)
