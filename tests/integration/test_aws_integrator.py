@@ -17,16 +17,15 @@ K8S_CP = "kubernetes-control-plane"
 async def kubeconfig(ops_test):
     kubeconfig_path = ops_test.tmp_path / "kubeconfig"
     retcode, stdout, stderr = await ops_test.juju(
-        "scp",
-        f"{K8S_CP}/leader:/home/ubuntu/config",
-        kubeconfig_path,
+        "ssh", f"{K8S_CP}/leader", "--", "cat", "config"
     )
     if retcode != 0:
         log.error(f"retcode: {retcode}")
         log.error(f"stdout:\n{stdout.strip()}")
         log.error(f"stderr:\n{stderr.strip()}")
         pytest.fail("Failed to copy kubeconfig from kubernetes-control-plane")
-    assert Path(kubeconfig_path).stat().st_size, "kubeconfig file is 0 bytes"
+    assert stdout, "kubeconfig file is 0 bytes"
+    kubeconfig_path.write_text(stdout)
     yield kubeconfig_path
 
 
